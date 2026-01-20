@@ -2,6 +2,7 @@
 #define MARKET_STREAM_HPP
 
 #include "net/net.hpp"
+#include "stream.hpp"
 #include "utils/json.hpp"
 #include "utils/queue.hpp"
 
@@ -24,26 +25,28 @@ enum class MARKET_STREAM_METHOD {
   GET_PROPERTY
 };
 
-class StreamQueryBuilder {
+class MarketStreamQueryBuilder {
 public:
   enum class DEPTH_LEVELS { SMALL = 5, MID = 10, LARGE = 20 };
 
 public:
-  explicit StreamQueryBuilder(MARKET_STREAM_METHOD method);
-  StreamQueryBuilder() = delete;
+  explicit MarketStreamQueryBuilder(MARKET_STREAM_METHOD method);
+  MarketStreamQueryBuilder() = delete;
 
   std::optional<JSONQuery> commit();
 
-  StreamQueryBuilder &add_trade_symbol(const std::string &symbol);
-  StreamQueryBuilder &add_aggTrade_symbol(const std::string &symbol);
-  StreamQueryBuilder &add_deffDepth_symbol(const std::string &symbol,
-                                           bool fast_update = true);
-  StreamQueryBuilder &add_partDepth_symbol(const std::string &symbol,
-                                           DEPTH_LEVELS level,
-                                           bool fast_update = true);
-  StreamQueryBuilder &add_bookTicker_symbol(const std::string &symbol);
+  MarketStreamQueryBuilder &add_trade_symbol(const std::string &symbol);
+  MarketStreamQueryBuilder &add_aggTrade_symbol(const std::string &symbol);
+  MarketStreamQueryBuilder &add_deffDepth_symbol(const std::string &symbol,
+                                                 bool fast_update = true);
+  MarketStreamQueryBuilder &add_partDepth_symbol(const std::string &symbol,
+                                                 DEPTH_LEVELS level,
+                                                 bool fast_update = true);
+  MarketStreamQueryBuilder &add_bookTicker_symbol(const std::string &symbol);
 
-  StreamQueryBuilder &set_combined_property(bool combined_flag = true);
+  MarketStreamQueryBuilder &set_combined_property(bool combined_flag = true);
+
+  static bool is_query_valid(const JSONQuery &query);
 
 private:
   bool _is_query_valid();
@@ -81,22 +84,11 @@ private:
 };
 
 // Market Stream
-class MarketStream {
+class MarketStream : public Stream {
 public:
-  MarketStream();
+  NetError connect_to_websocket() override;
 
-  WSError connect_to_websocket();
-
-  WSError execute_query(const JSONQuery &query);
-
-  // Temp method
-  void start_listening();
-  void start_reading();
-
-private:
-  Queue<std::string> m_msgQueue;
-
-  std::unique_ptr<WebSocket> m_webSocket; // main stream socket
+  NetError execute_query(const JSONQuery &query) override;
 };
 
 #endif // MARKET_STREAM_HPP

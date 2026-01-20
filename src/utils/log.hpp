@@ -8,6 +8,7 @@ class Log {
 public:
   // TODO: add log levels
   // TODO: maybe add logging to files
+  // TODO: add tags
   static void log(const std::string &msg, bool withEndl = true) {
     std::lock_guard<std::mutex> lock(s_ioMutex);
     std::cout << msg;
