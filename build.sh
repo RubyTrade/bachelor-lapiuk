@@ -55,7 +55,11 @@ run ()
 {
   echo "=== Bot is started ==="
   cd $SCRIPT_DIR
-  ./bin/TradingBot  
+
+  # first argument is absolute path to .env,
+  # to eliminate searching the relative path to it in app
+  # second argument is absolute path to binance read PK
+  ./bin/TradingBot "${SCRIPT_DIR}/.env" "${SCRIPT_DIR}/binance_read_private.pem"
   echo "=== Bot is stopped ==="
 }
 

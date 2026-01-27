@@ -1,74 +1,51 @@
 #include "market_stream.hpp"
+#include "net/net.hpp"
+#include "utils/json.hpp"
 #include "utils/log.hpp"
 
+#include <algorithm>
 #include <array>
-#include <iostream>
+#include <iterator>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "utils/constants.hpp"
 
-int StreamQueryBuilder::s_requestId = 0;
+int MarketStreamQueryBuilder::s_requestId = 0;
 
-// Market Stream
-MarketStream::MarketStream() : m_webSocket(Net::init_websocket()) {}
-
-WSError MarketStream::connect_to_websocket() {
-  WSError wsErr = m_webSocket->connect_to_server(
+NetError MarketStream::connect_to_websocket() {
+  NetError wsErr = Stream::_connect_to_websocket(
       std::string(Data::WS_HOST), Data::WS_PORT_MAIN,
-      std::string(Data::DEFAULT_TARGET));
+      std::string(Data::WS_DEFAULT_TARGET));
 
-  std::ostringstream ss;
+  // If the connection main port failed,
+  // try again with backup (https) port
   if (wsErr.hasError()) {
-    ss << "\nConnection unsuccessful: " << "errCode: " << (int)wsErr.getCode()
-       << " message: " << wsErr.getMessage();
-
-    Log::log_err(ss.str());
-  } else {
-    ss << "\nSuccessfully connected to: " << Data::WS_PORT_MAIN << ":"
-       << Data::WS_HOST << Data::DEFAULT_TARGET;
-
-    Log::log(ss.str());
+    wsErr.reset();
+    wsErr = Stream::_connect_to_websocket(std::string(Data::WS_HOST),
+                                          Data::HTTPS_PORT,
+                                          std::string(Data::WS_DEFAULT_TARGET));
   }
-
-  // Run context for async methods
-  m_webSocket->run_io_context();
 
   return wsErr;
 }
 
-WSError MarketStream::execute_query(const JSONQuery &query) {
-  WSError wsErr;
-  if (!query.is_empty()) {
-    m_webSocket->async_write_json(query.json());
-    return wsErr;
+NetError MarketStream::execute_query(const JSONQuery &query) {
+  if (!MarketStreamQueryBuilder::is_query_valid(query)) {
+    return NetError(NetErrorType::INVALID_QUERY_ERR,
+                    "Query is not MarketStreamQuery!");
   }
 
-  wsErr.setError(WSErrorType::WRITE_BUFFER_ERR, "The query is empty!");
-  return wsErr;
+  return Stream::_execute_query(query);
 }
 
-// Temp method
-void MarketStream::start_listening() {
-  m_webSocket->start_async_read(
-      [this](std::string &&msg) { m_msgQueue.push_message(std::move(msg)); });
-}
-
-void MarketStream::start_reading() {
-  while (true) {
-    std::string out_msg;
-    bool res = m_msgQueue.pop_message(out_msg);
-    if (res) {
-      Log::log("Read: " + out_msg);
-    }
-  }
-}
-
-// StreamQueryBuilder
-StreamQueryBuilder::StreamQueryBuilder(MARKET_STREAM_METHOD method)
+// MarketStreamQueryBuilder
+MarketStreamQueryBuilder::MarketStreamQueryBuilder(MARKET_STREAM_METHOD method)
     : m_method(method) {
   m_methodStr = _stream_method_to_str();
   ++s_requestId;
@@ -78,11 +55,11 @@ StreamQueryBuilder::StreamQueryBuilder(MARKET_STREAM_METHOD method)
   m_query.set_value(std::string(ID), std::to_string(s_requestId));
 }
 
-std::string StreamQueryBuilder::_stream_method_to_str() const {
+std::string MarketStreamQueryBuilder::_stream_method_to_str() const {
   return std::string(METHOD_STRINGS[(int)m_method]);
 }
 
-std::optional<JSONQuery> StreamQueryBuilder::commit() {
+std::optional<JSONQuery> MarketStreamQueryBuilder::commit() {
   // Only for GET_PROPERTY the single param is available: combined
   if (m_method == MARKET_STREAM_METHOD::GET_PROPERTY) {
     m_query.add_to_array(std::string(PARAMS), std::string("combined"));
@@ -91,11 +68,56 @@ std::optional<JSONQuery> StreamQueryBuilder::commit() {
   if (m_lastError.empty() && _is_query_valid()) {
     return m_query;
   }
-  std::cerr << "\nCommit unsuccessful due to error: " << m_lastError;
+  std::ostringstream ss;
+  ss << "\nCommit unsuccessful due to error: " << m_lastError;
+  Log::log_err(ss.str());
   return std::nullopt;
 }
 
-bool StreamQueryBuilder::_is_query_valid() {
+/* static */ bool
+MarketStreamQueryBuilder::is_query_valid(const JSONQuery &query) {
+  if (query.is_empty())
+    return false;
+
+  std::optional<nlohmann::json> json_method =
+      query.get_value(std::string(METHOD));
+
+  MARKET_STREAM_METHOD method_type = MARKET_STREAM_METHOD::SUBSCRIBE;
+
+  if (!json_method.has_value() || !json_method.value().is_string())
+    return false;
+
+  const std::string &method_str =
+      json_method.value().get_ref<const std::string &>();
+  std::string_view sv = method_str;
+  auto it = std::find(METHOD_STRINGS.begin(), METHOD_STRINGS.end(), sv);
+  if (it == METHOD_STRINGS.end())
+    return false;
+
+  method_type = (MARKET_STREAM_METHOD)std::distance(METHOD_STRINGS.begin(), it);
+
+  const auto &get_elem = [&]() {
+    for (const auto &elem : METHOD_REQUIREMENTS) {
+      if (elem.first == method_type) {
+        return elem.second;
+      }
+    }
+    // Impossible
+    return METHOD_REQUIREMENTS[0].second;
+  }();
+
+  const std::array<std::string_view, MAX_PROPS_NUM> &required_props = get_elem;
+
+  for (const auto &elem : required_props) {
+    if (!elem.empty() && !query.is_key_exists(std::string(elem))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool MarketStreamQueryBuilder::_is_query_valid() {
   if (m_query.is_empty()) {
     m_lastError = "The query is empty!";
     return false;
@@ -123,7 +145,7 @@ bool StreamQueryBuilder::_is_query_valid() {
   return true;
 }
 
-void StreamQueryBuilder::_add_to_params(const std::string &value) {
+void MarketStreamQueryBuilder::_add_to_params(const std::string &value) {
   if (value.empty()) {
     m_lastError = "Value is empty for method: " + m_methodStr;
     return;
@@ -137,23 +159,23 @@ void StreamQueryBuilder::_add_to_params(const std::string &value) {
   }
 }
 
-StreamQueryBuilder &
-StreamQueryBuilder::add_trade_symbol(const std::string &symbol) {
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::add_trade_symbol(const std::string &symbol) {
   _add_to_params(symbol + "@trade");
 
   return *this;
 }
 
-StreamQueryBuilder &
-StreamQueryBuilder::add_aggTrade_symbol(const std::string &symbol) {
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::add_aggTrade_symbol(const std::string &symbol) {
   _add_to_params(symbol + "@aggTrade");
 
   return *this;
 }
 
-StreamQueryBuilder &
-StreamQueryBuilder::add_deffDepth_symbol(const std::string &symbol,
-                                         bool fast_update /*= true*/) {
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::add_deffDepth_symbol(const std::string &symbol,
+                                               bool fast_update /*= true*/) {
   std::string fast_update_flag = "";
   if (!fast_update) {
     fast_update_flag = "@1000ms";
@@ -163,10 +185,10 @@ StreamQueryBuilder::add_deffDepth_symbol(const std::string &symbol,
   return *this;
 }
 
-StreamQueryBuilder &
-StreamQueryBuilder::add_partDepth_symbol(const std::string &symbol,
-                                         DEPTH_LEVELS level,
-                                         bool fast_update /*= true*/) {
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::add_partDepth_symbol(const std::string &symbol,
+                                               DEPTH_LEVELS level,
+                                               bool fast_update /*= true*/) {
   std::string fast_update_flag = "";
   if (!fast_update) {
     fast_update_flag = "@1000ms";
@@ -177,15 +199,15 @@ StreamQueryBuilder::add_partDepth_symbol(const std::string &symbol,
   return *this;
 }
 
-StreamQueryBuilder &
-StreamQueryBuilder::add_bookTicker_symbol(const std::string &symbol) {
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::add_bookTicker_symbol(const std::string &symbol) {
   _add_to_params(symbol + "@bookTicker");
 
   return *this;
 }
 
-StreamQueryBuilder &
-StreamQueryBuilder::set_combined_property(bool combined_flag /*= true*/) {
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::set_combined_property(bool combined_flag /*= true*/) {
   if (m_method == MARKET_STREAM_METHOD::SET_PROPERTY) {
     m_query.add_to_array(std::string(PARAMS), std::string("combined"));
     m_query.add_to_array(std::string(PARAMS), combined_flag);

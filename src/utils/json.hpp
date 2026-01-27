@@ -1,13 +1,17 @@
 #ifndef JSON_HPP
 #define JSON_HPP
 
+#include "nlohmann/json_fwd.hpp"
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 
 #include <nlohmann/json.hpp>
 
 // One of this values might be in JSONValue
-using JSONValue = std::variant<std::string, bool, int, nlohmann::json>;
+using JSONValue =
+    std::variant<std::string, bool, int, uint64_t, nlohmann::json>;
 
 class JSONQuery {
 public:
@@ -18,8 +22,13 @@ public:
   void add_to_array(const std::string &key, const JSONValue &value);
   void remove_key(const std::string &key);
 
+  std::optional<nlohmann::json> get_value(const std::string &key) const;
   bool is_key_exists(const std::string &key) const;
   bool is_empty() const;
+
+  static std::optional<nlohmann::json> get_value(const nlohmann::json &json,
+                                                 const std::string &key);
+  static bool is_key_exists(const nlohmann::json &json, const std::string &key);
 
 private:
   nlohmann::json m_jsonQuery = {};
