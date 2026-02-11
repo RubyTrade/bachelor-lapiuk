@@ -1,8 +1,8 @@
 #ifndef TIME_HPP
 #define TIME_HPP
 
-#include "utils/log.hpp"
-#include "utils/thread.hpp"
+#include "core/utils/log.hpp"
+#include "core/utils/thread.hpp"
 #include <atomic>
 #include <boost/asio.hpp>
 #include <boost/asio/basic_waitable_timer.hpp>

@@ -2,7 +2,7 @@
 
 #include <sstream>
 
-#include "utils/log.hpp"
+#include "core/utils/log.hpp"
 
 // TODO: add check if ws is running
 

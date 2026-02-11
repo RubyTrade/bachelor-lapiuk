@@ -1,7 +1,7 @@
 #ifndef CRYPTO_HPP
 #define CRYPTO_HPP
 
-#include "utils/log.hpp"
+#include "core/utils/log.hpp"
 #include <string>
 #include <vector>
 

@@ -1,12 +1,12 @@
 #include "market_stream.hpp"
-#include "net/net.hpp"
-#include "utils/json.hpp"
-#include "utils/log.hpp"
+#include "core/net/net.hpp"
+#include "core/utils/constants.hpp"
+#include "core/utils/json.hpp"
+#include "core/utils/log.hpp"
 
 #include <algorithm>
 #include <array>
 #include <iterator>
-#include <memory>
 #include <optional>
 #include <ostream>
 #include <sstream>
@@ -14,23 +14,12 @@
 #include <string_view>
 #include <utility>
 
-#include "utils/constants.hpp"
-
 int MarketStreamQueryBuilder::s_requestId = 0;
 
 NetError MarketStream::connect_to_websocket() {
   NetError wsErr = Stream::_connect_to_websocket(
-      std::string(Data::WS_HOST), Data::WS_PORT_MAIN,
+      std::string(Data::WS_HOST), Data::HTTPS_PORT,
       std::string(Data::WS_DEFAULT_TARGET));
-
-  // If the connection main port failed,
-  // try again with backup (https) port
-  if (wsErr.hasError()) {
-    wsErr.reset();
-    wsErr = Stream::_connect_to_websocket(std::string(Data::WS_HOST),
-                                          Data::HTTPS_PORT,
-                                          std::string(Data::WS_DEFAULT_TARGET));
-  }
 
   return wsErr;
 }
@@ -174,11 +163,23 @@ MarketStreamQueryBuilder::add_aggTrade_symbol(const std::string &symbol) {
 }
 
 MarketStreamQueryBuilder &
-MarketStreamQueryBuilder::add_deffDepth_symbol(const std::string &symbol,
+MarketStreamQueryBuilder::add_markPrice_symbol(const std::string &symbol,
                                                bool fast_update /*= true*/) {
-  std::string fast_update_flag = "";
+  std::string fast_update_flag = "@1s";
   if (!fast_update) {
-    fast_update_flag = "@1000ms";
+    fast_update_flag = "";
+  }
+  _add_to_params(symbol + "@markPrice" + fast_update_flag);
+
+  return *this;
+}
+
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::add_diffDepth_symbol(const std::string &symbol,
+                                               bool fast_update /*= true*/) {
+  std::string fast_update_flag = "@100ms";
+  if (!fast_update) {
+    fast_update_flag = "@500ms";
   }
   _add_to_params(symbol + "@depth" + fast_update_flag);
 
@@ -189,9 +190,9 @@ MarketStreamQueryBuilder &
 MarketStreamQueryBuilder::add_partDepth_symbol(const std::string &symbol,
                                                DEPTH_LEVELS level,
                                                bool fast_update /*= true*/) {
-  std::string fast_update_flag = "";
+  std::string fast_update_flag = "@100ms";
   if (!fast_update) {
-    fast_update_flag = "@1000ms";
+    fast_update_flag = "@500ms";
   }
   _add_to_params(symbol + "@depth" + std::to_string((int)level) +
                  fast_update_flag);

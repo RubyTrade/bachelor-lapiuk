@@ -1,9 +1,9 @@
 #ifndef NET_HPP
 #define NET_HPP
 
+#include "core/utils/log.hpp"
+#include "core/utils/thread.hpp"
 #include "nlohmann/json_fwd.hpp"
-#include "utils/log.hpp"
-#include "utils/thread.hpp"
 #include <atomic>
 #include <boost/asio/execution/prefer_only.hpp>
 #include <boost/asio/executor_work_guard.hpp>
@@ -136,7 +136,7 @@ private:
 
   const tcp_resolve_results _resolve_host(const std::string &host, int port);
   tcp::endpoint _tcp_connect(const tcp_resolve_results &results);
-  void _ssl_handshake();
+  void _ssl_handshake(const std::string &host);
   void _websocket_handshake(const std::string &host, const std::string &target);
 
 private:
@@ -193,7 +193,8 @@ private:
   tcp::endpoint _tcp_connect(StreamT &stream,
                              const tcp_resolve_results &results);
 
-  template <typename StreamT> void _ssl_handshake(StreamT &stream);
+  template <typename StreamT>
+  void _ssl_handshake(StreamT &stream, const std::string &host);
 
   template <typename StreamT>
   void _write(StreamT &stream, http::request<http::string_body> req);

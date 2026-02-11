@@ -36,9 +36,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "utils/constants.hpp"
-#include "utils/log.hpp"
-#include "utils/thread.hpp"
+#include "core/utils/constants.hpp"
+#include "core/utils/log.hpp"
+#include "core/utils/thread.hpp"
 
 // WebSocket
 WebSocket::WebSocket(bool useSsl, ssl::context::method context_ssl)
@@ -113,8 +113,15 @@ tcp::endpoint WebSocket::_tcp_connect(const tcp_resolve_results &results) {
   return endpoint;
 }
 
-void WebSocket::_ssl_handshake() {
+void WebSocket::_ssl_handshake(const std::string &host) {
   boost::system::error_code error_code;
+  // Setting up SNI
+  if (!SSL_set_tlsext_host_name(m_websocket.next_layer().native_handle(),
+                                host.c_str())) {
+    throw NetworkException("Failed to set SNI",
+                           NetErrorType::SSL_HANDSHAKE_ERR);
+  }
+
   m_websocket.next_layer().handshake(ssl::stream_base::client, error_code);
   if (error_code) {
     throw NetworkException("ssl_handshake error: " + error_code.message(),
@@ -146,7 +153,7 @@ NetError WebSocket::connect_to_server(const std::string &host, int port,
     _tcp_connect(results);
 
     // SSL Handshake
-    _ssl_handshake();
+    _ssl_handshake(host);
 
     // WebSocket Handshake
     _websocket_handshake(host, target);
@@ -270,7 +277,7 @@ NetError HttpRequest::_do_request(
 
     if constexpr (std::is_same_v<StreamT, ssl::stream<tcp::socket>>) {
       // SSL Handshake
-      _ssl_handshake(stream);
+      _ssl_handshake(stream, host);
     }
     // Prepare request
     http::request<http::string_body> req =
@@ -355,9 +362,16 @@ tcp::endpoint HttpRequest::_tcp_connect(StreamT &stream,
   return endpoint;
 }
 
-template <typename StreamT> void HttpRequest::_ssl_handshake(StreamT &stream) {
+template <typename StreamT>
+void HttpRequest::_ssl_handshake(StreamT &stream, const std::string &host) {
   boost::system::error_code error_code;
   if constexpr (std::is_same_v<StreamT, ssl::stream<tcp::socket>>) {
+    // Setting up SNI
+    if (!SSL_set_tlsext_host_name(stream.native_handle(), host.c_str())) {
+      throw NetworkException("Failed to set SNI",
+                             NetErrorType::SSL_HANDSHAKE_ERR);
+    }
+
     stream.handshake(ssl::stream_base::client, error_code);
   }
   if (error_code) {
