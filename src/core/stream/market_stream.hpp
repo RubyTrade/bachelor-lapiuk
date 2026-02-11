@@ -1,10 +1,10 @@
 #ifndef MARKET_STREAM_HPP
 #define MARKET_STREAM_HPP
 
-#include "net/net.hpp"
+#include "core/net/net.hpp"
+#include "core/utils/json.hpp"
+#include "core/utils/queue.hpp"
 #include "stream.hpp"
-#include "utils/json.hpp"
-#include "utils/queue.hpp"
 
 #include <array>
 #include <memory>
@@ -37,7 +37,9 @@ public:
 
   MarketStreamQueryBuilder &add_trade_symbol(const std::string &symbol);
   MarketStreamQueryBuilder &add_aggTrade_symbol(const std::string &symbol);
-  MarketStreamQueryBuilder &add_deffDepth_symbol(const std::string &symbol,
+  MarketStreamQueryBuilder &add_markPrice_symbol(const std::string &symbol,
+                                                 bool fast_update = true);
+  MarketStreamQueryBuilder &add_diffDepth_symbol(const std::string &symbol,
                                                  bool fast_update = true);
   MarketStreamQueryBuilder &add_partDepth_symbol(const std::string &symbol,
                                                  DEPTH_LEVELS level,

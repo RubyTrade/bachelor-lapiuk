@@ -3,6 +3,7 @@
 
 #include "nlohmann/json_fwd.hpp"
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <variant>
@@ -15,6 +16,13 @@ using JSONValue =
 
 class JSONQuery {
 public:
+  JSONQuery() = default;
+
+  JSONQuery(const std::string &json)
+      : m_jsonQuery(nlohmann::json::parse(json)) {}
+  JSONQuery(const nlohmann::json &json) : m_jsonQuery(json) {}
+  JSONQuery(const JSONQuery &json) : m_jsonQuery(json.json()) {}
+
   std::string str() const { return m_jsonQuery.dump(); }
   nlohmann::json json() const { return m_jsonQuery; }
 
@@ -25,6 +33,8 @@ public:
   std::optional<nlohmann::json> get_value(const std::string &key) const;
   bool is_key_exists(const std::string &key) const;
   bool is_empty() const;
+
+  std::map<std::string, JSONValue> get_map_of_items() const;
 
   static std::optional<nlohmann::json> get_value(const nlohmann::json &json,
                                                  const std::string &key);

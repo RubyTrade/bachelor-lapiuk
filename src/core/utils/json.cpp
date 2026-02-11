@@ -1,7 +1,7 @@
 #include "json.hpp"
 #include "nlohmann/json_fwd.hpp"
-#include <iterator>
 #include <optional>
+#include <string>
 
 void JSONQuery::set_value(const std::string &key, const JSONValue &value) {
   std::visit(
@@ -40,6 +40,25 @@ JSONQuery::get_value(const std::string &key) const {
 
 bool JSONQuery::is_key_exists(const std::string &key) const {
   return m_jsonQuery.contains(key);
+}
+
+std::map<std::string, JSONValue> JSONQuery::get_map_of_items() const {
+  std::map<std::string, JSONValue> result{};
+
+  for (auto &[key, value] : m_jsonQuery.items()) {
+    if (value.is_string())
+      result[key] = value.get<std::string>();
+    else if (value.is_number_unsigned())
+      result[key] = value.get<uint64_t>();
+    else if (value.is_number_integer())
+      result[key] = value.get<int>();
+    else if (value.is_boolean())
+      result[key] = value.get<bool>();
+    else
+      result[key] = value.dump(); // fallback
+  }
+
+  return result;
 }
 
 /* static */ std::optional<nlohmann::json>
