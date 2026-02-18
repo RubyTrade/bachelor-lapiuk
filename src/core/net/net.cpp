@@ -63,8 +63,6 @@ void WebSocket::_read_async() {
         if (ec) {
           // TODO: maybe handle this error
           Log::log_err("\nRead error: " + ec.message());
-          if (ec.message().find("Operation canceled") != std::string::npos)
-            return;
         }
 
         std::string data = beast::buffers_to_string(m_buffer.data());

@@ -42,17 +42,21 @@ NetError TradingStream::execute_query(const JSONQuery &query) {
 
 // TradingStreamQueryBuilder
 TradingStreamQueryBuilder::TradingStreamQueryBuilder(
-    USER_DATA_STREAM_METHOD method)
-    : m_method(method) {
-  m_methodStr = type_to_str(METHOD_NAMES, m_method);
-  ++s_requestId;
+    USER_DATA_STREAM_METHOD method) {
+  setMethod(method);
+}
 
-  // Query init
-  m_query.set_value(std::string(METHOD), m_methodStr);
-  m_query.set_value(std::string(ID), std::to_string(s_requestId));
+TradingStreamQueryBuilder &
+TradingStreamQueryBuilder::setMethod(USER_DATA_STREAM_METHOD method) {
+  m_method = method;
+  m_methodStr = type_to_str(METHOD_NAMES, m_method);
+
+  return *this;
 }
 
 std::optional<JSONQuery> TradingStreamQueryBuilder::commit() {
+  _init_query();
+
   // Timestamp is required only for session.logon
   if (is_params_required(m_method)) {
     _add_apiKey();
@@ -64,11 +68,19 @@ std::optional<JSONQuery> TradingStreamQueryBuilder::commit() {
   }
 
   if (m_lastError.empty() && _is_query_valid()) {
-    return m_query;
+    JSONQuery tmp = m_query;
+
+    // Clear up after successfull commit
+    _cleanup();
+
+    return tmp;
   }
   std::ostringstream ss;
   ss << "\nCommit unsuccessful due to error: " << m_lastError;
   Log::log_err(ss.str());
+
+  _cleanup();
+
   return std::nullopt;
 }
 
@@ -103,6 +115,17 @@ TradingStreamQueryBuilder::add_borderless_params(const JSONQuery &query) {
   }
 
   return *this;
+}
+
+void TradingStreamQueryBuilder::_init_query() {
+  m_query.set_value(std::string(METHOD), m_methodStr);
+  m_query.set_value(std::string(ID), std::to_string(++s_requestId));
+}
+
+void TradingStreamQueryBuilder::_cleanup() {
+  m_lastError = "";
+  m_query = JSONQuery();
+  m_params_query = JSONQuery();
 }
 
 void TradingStreamQueryBuilder::_add_to_params(const std::string &key,
@@ -296,12 +319,20 @@ bool TradingStreamQueryBuilder::_is_query_valid() {
 
 std::optional<JSONQuery> ParametersBuilder::commit() {
   if (m_lastError.empty()) {
-    return m_params_query;
+    JSONQuery tmp = m_params_query;
+
+    // Clear up after successfull commit
+    _cleanup();
+
+    return tmp;
   }
 
   std::ostringstream ss;
   ss << "\nCommit unsuccessful due to error: " << m_lastError;
   Log::log_err(ss.str());
+
+  _cleanup();
+
   return std::nullopt;
 }
 
@@ -309,6 +340,11 @@ ParametersBuilder &ParametersBuilder::add_symbol(const std::string &symbol) {
   _add_to_params("symbol", symbol);
 
   return *this;
+}
+
+void ParametersBuilder::_cleanup() {
+  m_lastError = "";
+  m_params_query = JSONQuery();
 }
 
 ParametersBuilder &

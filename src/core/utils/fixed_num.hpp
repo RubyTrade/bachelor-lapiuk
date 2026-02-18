@@ -37,10 +37,13 @@ public:
   bool operator>=(const Fixed &) const;
 
 public:
+  static Fixed str_to_fixed(const std::string &str);
+
+public:
   int scale() const { return m_scale; }
   int64_t value() const { return m_value; }
 
-  void change_scale_to(int newScale) { m_scale = newScale; }
+  void change_scale_to(int newScale) { m_scale = _constraint_scale(newScale); }
 
   std::string to_string() const;
 
