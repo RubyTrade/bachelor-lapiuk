@@ -12,7 +12,7 @@
 // User Data Stream
 class UserDataStream : public Stream {
 public:
-  UserDataStream();
+  UserDataStream(Queue<std::string> &msgQueue);
 
   NetError connect_to_websocket() override;
 

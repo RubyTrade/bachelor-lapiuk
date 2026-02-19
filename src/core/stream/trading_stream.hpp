@@ -1,6 +1,7 @@
 #ifndef TRADING_STREAM_HPP
 #define TRADING_STREAM_HPP
 
+#include "core/utils/constants.hpp"
 #include "core/utils/fixed_num.hpp"
 #include "core/utils/json.hpp"
 #include "stream.hpp"
@@ -8,30 +9,6 @@
 #include <climits>
 #include <optional>
 #include <string>
-
-enum class ORDER_TYPE {
-  LIMIT,
-  MARKET,
-  STOP,
-  STOP_MARKET,
-  TAKE_PROFIT,
-  TAKE_PROFIT_MARKET,
-  TRAILING_STOP_MARKET
-};
-
-enum class ORDER_SIDE { BUY, SELL };
-enum class POSITION_SIDE { BOTH, LONG, SHORT };
-
-/*
-GTC - Good Till Cancel (GTC order valitidy is 1 year from placement)
-IOC - Immediate or Cancel
-FOK - Fill or Kill
-GTX - Good Till Crossing (Post Only)
-GTD - Good Till Date
-RPI - Retail Price Improvement
-*/
-
-enum class TIME_IN_FORCE { GTC, IOC, FOK, GTX, GTD, RPI };
 
 class ParametersBuilder {
 public:
@@ -56,35 +33,8 @@ public:
   ParametersBuilder &add_origType(const ORDER_TYPE &type);
 
 private:
+  void _cleanup();
   void _add_to_params(const std::string &key, const std::string &value);
-
-private:
-  static constexpr std::array<EnumStringPair<POSITION_SIDE>, 3>
-      POSITION_SIDE_STR{{{POSITION_SIDE::BOTH, "BOTH"},
-                         {POSITION_SIDE::LONG, "LONG"},
-                         {POSITION_SIDE::SHORT, "SHORT"}}};
-
-  static constexpr std::array<EnumStringPair<ORDER_SIDE>, 2> ORDER_SIDE_STR{
-      {{ORDER_SIDE::BUY, "BUY"}, {ORDER_SIDE::SELL, "SELL"}}};
-
-  static constexpr std::array<EnumStringPair<TIME_IN_FORCE>, 6>
-      TIME_IN_FORCE_STR{{
-          {TIME_IN_FORCE::GTC, "GTC"},
-          {TIME_IN_FORCE::IOC, "IOC"},
-          {TIME_IN_FORCE::FOK, "FOK"},
-          {TIME_IN_FORCE::GTX, "TGX"},
-          {TIME_IN_FORCE::GTD, "GTD"},
-          {TIME_IN_FORCE::RPI, "RPI"},
-      }};
-
-  static constexpr std::array<EnumStringPair<ORDER_TYPE>, 7> ORDER_TYPE_STR{
-      {{ORDER_TYPE::MARKET, "MARKET"},
-       {ORDER_TYPE::LIMIT, "LIMIT"},
-       {ORDER_TYPE::STOP_MARKET, "STOP_MARKET"},
-       {ORDER_TYPE::STOP, "STOP"},
-       {ORDER_TYPE::TRAILING_STOP_MARKET, "TRAILING_STOP_MARKET"},
-       {ORDER_TYPE::TAKE_PROFIT_MARKET, "TAKE_PROFIT_MARKET"},
-       {ORDER_TYPE::TAKE_PROFIT, "TAKE_PROFIT"}}};
 
 private:
   JSONQuery m_params_query;
@@ -152,11 +102,16 @@ public:
   explicit TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD method);
   TradingStreamQueryBuilder() = delete;
 
+  TradingStreamQueryBuilder &setMethod(USER_DATA_STREAM_METHOD method);
+
   std::optional<JSONQuery> commit();
 
   TradingStreamQueryBuilder &add_borderless_params(const JSONQuery &query);
 
 private:
+  void _init_query();
+  void _cleanup();
+
   bool _is_query_valid();
   void _add_to_params(const std::string &key, const std::string &value);
 
@@ -211,6 +166,8 @@ private:
 // Trading Stream
 class TradingStream : public Stream {
 public:
+  TradingStream(Queue<std::string> &msgQueue) : Stream(msgQueue) {}
+
   NetError connect_to_websocket() override;
 
   NetError execute_query(const JSONQuery &query) override;

@@ -16,8 +16,9 @@
 
 // TODO: add listenKey validity check
 
-UserDataStream::UserDataStream()
-    : m_http_session_manager(Net::init_http_session_manager()),
+UserDataStream::UserDataStream(Queue<std::string> &msgQueue)
+    : Stream(msgQueue),
+      m_http_session_manager(Net::init_http_session_manager()),
       m_key_timer(std::make_unique<AsyncTimer>()) {}
 
 NetError UserDataStream::connect_to_websocket() {

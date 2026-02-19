@@ -7,7 +7,6 @@
 #include "stream.hpp"
 
 #include <array>
-#include <memory>
 #include <string>
 #include <string_view>
 
@@ -33,6 +32,8 @@ public:
   explicit MarketStreamQueryBuilder(MARKET_STREAM_METHOD method);
   MarketStreamQueryBuilder() = delete;
 
+  MarketStreamQueryBuilder &setMethod(MARKET_STREAM_METHOD method);
+
   std::optional<JSONQuery> commit();
 
   MarketStreamQueryBuilder &add_trade_symbol(const std::string &symbol);
@@ -50,16 +51,20 @@ public:
 
   static bool is_query_valid(const JSONQuery &query);
 
+public:
+  static constexpr std::string_view PARAMS = "params";
+  static constexpr std::string_view METHOD = "method";
+  static constexpr std::string_view ID = "id";
+
 private:
+  void _init_query();
+  void _cleanup();
   bool _is_query_valid();
   std::string _stream_method_to_str() const;
   void _add_to_params(const std::string &value);
 
 private:
   static constexpr short MAX_PROPS_NUM = 3;
-  static constexpr std::string_view PARAMS = "params";
-  static constexpr std::string_view METHOD = "method";
-  static constexpr std::string_view ID = "id";
   static constexpr std::array<std::string_view, 5> METHOD_STRINGS{
       "SUBSCRIBE", "UNSUBSCRIBE", "LIST_SUBSCRIPTIONS", "SET_PROPERTY",
       "GET_PROPERTY"};
@@ -88,6 +93,8 @@ private:
 // Market Stream
 class MarketStream : public Stream {
 public:
+  MarketStream(Queue<std::string> &msgQueue) : Stream(msgQueue) {};
+
   NetError connect_to_websocket() override;
 
   NetError execute_query(const JSONQuery &query) override;

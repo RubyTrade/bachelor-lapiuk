@@ -7,7 +7,8 @@
 // TODO: add check if ws is running
 
 // Stream
-Stream::Stream() : m_webSocket(Net::init_websocket()) {}
+Stream::Stream(Queue<std::string> &msgQueue)
+    : m_webSocket(Net::init_websocket()), m_msgQueue(msgQueue) {}
 
 NetError Stream::_connect_to_websocket(const std::string &host, int port,
                                        const std::string &target) {
@@ -42,18 +43,7 @@ NetError Stream::_execute_query(const JSONQuery &query) {
   return wsErr;
 }
 
-// Temp method
 void Stream::start_listening() {
   m_webSocket->start_async_read(
       [this](std::string &&msg) { m_msgQueue.push_message(std::move(msg)); });
-}
-
-void Stream::start_reading() {
-  while (true) {
-    std::string out_msg;
-    bool res = m_msgQueue.pop_message(out_msg);
-    if (res) {
-      Log::log("Read: " + out_msg);
-    }
-  }
 }

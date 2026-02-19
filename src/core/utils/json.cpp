@@ -54,6 +54,10 @@ std::map<std::string, JSONValue> JSONQuery::get_map_of_items() const {
       result[key] = value.get<int>();
     else if (value.is_boolean())
       result[key] = value.get<bool>();
+    else if (value.is_object())
+      result[key] = value.get<nlohmann::json>();
+    else if (value.is_null())
+      result[key] = std::string("null");
     else
       result[key] = value.dump(); // fallback
   }

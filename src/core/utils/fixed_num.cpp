@@ -5,6 +5,14 @@
 #include <limits>
 #include <string>
 
+/* static */ Fixed Fixed::str_to_fixed(const std::string &str) {
+  size_t scale = 0;
+  if (size_t dotPos = str.find('.'); dotPos != std::string::npos)
+    scale = str.length() - dotPos - 1;
+
+  return Fixed(str, scale);
+}
+
 Fixed::Fixed(int64_t val, int scale) : m_value(val) {
   m_scale = _constraint_scale(scale);
 }
@@ -35,11 +43,11 @@ int Fixed::_constraint_scale(int scale) {
 
 int64_t Fixed::_value_from_string(const std::string &str, int scale) {
   double d = std::stod(str);
-  return static_cast<int64_t>(std::round(d * std::pow(10, scale)));
+  return static_cast<int64_t>(d * std::pow(10, scale));
 }
 
 int64_t Fixed::_value_from_double(double val, int scale) {
-  return static_cast<int64_t>(std::round(val * std::pow(10, scale)));
+  return static_cast<int64_t>(val * std::pow(10, scale));
 }
 
 std::string Fixed::to_string() const {

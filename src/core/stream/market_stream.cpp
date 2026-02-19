@@ -1,4 +1,5 @@
 #include "market_stream.hpp"
+#include "core/controllers/market_data_controller.hpp"
 #include "core/net/net.hpp"
 #include "core/utils/constants.hpp"
 #include "core/utils/json.hpp"
@@ -34,14 +35,17 @@ NetError MarketStream::execute_query(const JSONQuery &query) {
 }
 
 // MarketStreamQueryBuilder
-MarketStreamQueryBuilder::MarketStreamQueryBuilder(MARKET_STREAM_METHOD method)
-    : m_method(method) {
-  m_methodStr = _stream_method_to_str();
-  ++s_requestId;
+MarketStreamQueryBuilder::MarketStreamQueryBuilder(
+    MARKET_STREAM_METHOD method) {
+  setMethod(method);
+}
 
-  // Query init
-  m_query.set_value(std::string(METHOD), m_methodStr);
-  m_query.set_value(std::string(ID), std::to_string(s_requestId));
+MarketStreamQueryBuilder &
+MarketStreamQueryBuilder::setMethod(MARKET_STREAM_METHOD method) {
+  m_method = method;
+  m_methodStr = _stream_method_to_str();
+
+  return *this;
 }
 
 std::string MarketStreamQueryBuilder::_stream_method_to_str() const {
@@ -49,17 +53,27 @@ std::string MarketStreamQueryBuilder::_stream_method_to_str() const {
 }
 
 std::optional<JSONQuery> MarketStreamQueryBuilder::commit() {
+  _init_query();
+
   // Only for GET_PROPERTY the single param is available: combined
   if (m_method == MARKET_STREAM_METHOD::GET_PROPERTY) {
     m_query.add_to_array(std::string(PARAMS), std::string("combined"));
   }
 
   if (m_lastError.empty() && _is_query_valid()) {
-    return m_query;
+    JSONQuery tmp = m_query;
+
+    // Clear up after successfull commit
+    _cleanup();
+
+    return tmp;
   }
   std::ostringstream ss;
   ss << "\nCommit unsuccessful due to error: " << m_lastError;
   Log::log_err(ss.str());
+
+  _cleanup();
+
   return std::nullopt;
 }
 
@@ -104,6 +118,16 @@ MarketStreamQueryBuilder::is_query_valid(const JSONQuery &query) {
   }
 
   return true;
+}
+
+void MarketStreamQueryBuilder::_init_query() {
+  m_query.set_value(std::string(METHOD), m_methodStr);
+  m_query.set_value(std::string(ID), std::to_string(++s_requestId));
+}
+
+void MarketStreamQueryBuilder::_cleanup() {
+  m_lastError = "";
+  m_query = JSONQuery();
 }
 
 bool MarketStreamQueryBuilder::_is_query_valid() {
