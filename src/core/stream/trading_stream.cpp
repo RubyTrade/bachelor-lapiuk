@@ -18,16 +18,6 @@ NetError TradingStream::connect_to_websocket() {
       std::string(Data::WS_TRADING_HOST), Data::WS_PORT_MAIN,
       std::string(Data::WS_TRADING_API_TARGET));
 
-  if (!wsErr.hasError()) {
-    std::optional<JSONQuery> auth_query =
-        TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD::SESSION_LOGON)
-            .commit();
-
-    if (auth_query) {
-      wsErr = execute_query(auth_query.value());
-    }
-  }
-
   return wsErr;
 }
 
@@ -42,12 +32,12 @@ NetError TradingStream::execute_query(const JSONQuery &query) {
 
 // TradingStreamQueryBuilder
 TradingStreamQueryBuilder::TradingStreamQueryBuilder(
-    USER_DATA_STREAM_METHOD method) {
+    TRADE_STREAM_METHOD method) {
   setMethod(method);
 }
 
 TradingStreamQueryBuilder &
-TradingStreamQueryBuilder::setMethod(USER_DATA_STREAM_METHOD method) {
+TradingStreamQueryBuilder::setMethod(TRADE_STREAM_METHOD method) {
   m_method = method;
   m_methodStr = type_to_str(METHOD_NAMES, m_method);
 
@@ -223,17 +213,17 @@ void TradingStreamQueryBuilder::_add_rsa_signature() {
 }
 
 /* static */ bool TradingStreamQueryBuilder::is_params_required(
-    const USER_DATA_STREAM_METHOD &method) {
+    const TRADE_STREAM_METHOD &method) {
   uint16_t m = static_cast<uint16_t>(method);
 
-  return ((m & 0xFF00) >= uint16_t(USER_DATA_METHOD_GROUP::PARAMS_ONLY));
+  return ((m & 0xFF00) >= uint16_t(TRADE_METHOD_GROUP::PARAMS_ONLY));
 }
 
 /* static */ bool TradingStreamQueryBuilder::is_boundless_params_required(
-    const USER_DATA_STREAM_METHOD &method) {
+    const TRADE_STREAM_METHOD &method) {
   uint16_t m = static_cast<uint16_t>(method);
 
-  return ((m & 0xFF00) >= uint16_t(USER_DATA_METHOD_GROUP::BOUNDLESS_PARAMS));
+  return ((m & 0xFF00) >= uint16_t(TRADE_METHOD_GROUP::BOUNDLESS_PARAMS));
 }
 
 /* static */ bool
@@ -244,7 +234,7 @@ TradingStreamQueryBuilder::is_query_valid(const JSONQuery &query) {
   std::optional<nlohmann::json> json_method =
       query.get_value(std::string(METHOD));
 
-  USER_DATA_STREAM_METHOD method_type = USER_DATA_STREAM_METHOD::INVALID_METHOD;
+  TRADE_STREAM_METHOD method_type = TRADE_STREAM_METHOD::INVALID_METHOD;
 
   if (!json_method.has_value() || !json_method.value().is_string())
     return false;
@@ -254,7 +244,7 @@ TradingStreamQueryBuilder::is_query_valid(const JSONQuery &query) {
 
   method_type = str_to_type(METHOD_NAMES, method_str);
 
-  if (method_type == USER_DATA_STREAM_METHOD::INVALID_METHOD)
+  if (method_type == TRADE_STREAM_METHOD::INVALID_METHOD)
     return false;
 
   for (const auto &elem : METHOD_REQUIREMENTS) {
@@ -285,7 +275,7 @@ bool TradingStreamQueryBuilder::_is_query_valid() {
     return false;
   }
 
-  if (m_method == USER_DATA_STREAM_METHOD::INVALID_METHOD) {
+  if (m_method == TRADE_STREAM_METHOD::INVALID_METHOD) {
     m_lastError = "Selected method is invalid!";
     return false;
   }
@@ -391,6 +381,19 @@ ParametersBuilder &ParametersBuilder::add_type(const ORDER_TYPE &type) {
   return *this;
 }
 
+ParametersBuilder &
+ParametersBuilder::add_clientOrderId(const std::string &clientOrderId) {
+  _add_to_params("newClientOrderId", clientOrderId);
+
+  return *this;
+}
+
+ParametersBuilder &ParametersBuilder::add_reduceOnly(bool reduceOnly) {
+  _add_to_params("newClientOrderId", reduceOnly ? "true" : "false");
+
+  return *this;
+}
+
 // Algo params
 ParametersBuilder &ParametersBuilder::add_algoType(const ORDER_TYPE &type) {
   std::string type_str = type_to_str(ORDER_TYPE_STR, type);
@@ -429,6 +432,13 @@ ParametersBuilder::add_priceMatch(const std::string &priceMatch) {
 ParametersBuilder &ParametersBuilder::add_origType(const ORDER_TYPE &type) {
   std::string type_str = type_to_str(ORDER_TYPE_STR, type);
   _add_to_params("origType", type_str);
+
+  return *this;
+}
+
+ParametersBuilder &
+ParametersBuilder::add_origClientOrderId(const std::string &clientOrderId) {
+  _add_to_params("origClientOrderId", clientOrderId);
 
   return *this;
 }

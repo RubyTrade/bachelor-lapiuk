@@ -10,11 +10,13 @@
 #include <variant>
 
 #include "core/controllers/market_data_controller.hpp"
+#include "core/controllers/trading_stream_controller.hpp"
 #include "core/net/net.hpp"
 #include "core/parsers/market_data_parser.hpp"
 #include "core/stream/market_stream.hpp"
 #include "core/stream/trading_stream.hpp"
 #include "core/stream/user_data_stream.hpp"
+#include "core/utils/constants.hpp"
 #include "core/utils/dotenv.hpp"
 #include "core/utils/fixed_num.hpp"
 #include "core/utils/json.hpp"
@@ -23,6 +25,8 @@
 #include "core/utils/time.hpp"
 
 void test_market_data_parsing() {
+  using namespace Market;
+
   struct TestCase {
     std::string jsonStr;
     std::string expectedType; // "TradeData", "AggTradeData", etc.
@@ -107,53 +111,63 @@ void test_market_data_parsing() {
 
 int main(int argc, char *argv[]) {
   std::string dotenv_path = ".env";
-  std::string pk_path = "private.pem";
+  std::string pk_path = "binance_private.pem";
   if (argc > 1) {
     dotenv_path = argv[1];
     pk_path = argv[2];
-
-    std::ifstream file(pk_path, std::ios::binary);
-    std::ostringstream oss;
-    if (file) {
-      oss << file.rdbuf();
-    }
-
-    Env::getInstance().setenv("BINANCE_PRIVATE_KEY", oss.str());
   }
+
+  std::ifstream file(pk_path, std::ios::binary);
+  std::ostringstream oss;
+  if (file) {
+    oss << file.rdbuf();
+  }
+
+  Env::getInstance().setenv("BINANCE_PRIVATE_KEY", oss.str());
 
   // MarketStream test
 
   // test_market_data_parsing();
-  /*
-    std::unique_ptr<MarketDataController> market_controller =
-        std::make_unique<MarketDataController>();
 
-    MarketRequest req1{"btcusdt", MARKET_DATA_TYPE::AGG_TRADE};
-    market_controller->subscribe_to(req1);
+  /*
+  std::unique_ptr<Market::MarketDataController> market_controller =
+      std::make_unique<Market::MarketDataController>();
+
+  Market::MarketRequest req1{"btcusdt", MARKET_DATA_TYPE::AGG_TRADE};
+  market_controller->subscribe_to(req1);
+
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+
+  Market::MarketRequest req2{"btcusdt", MARKET_DATA_TYPE::AGG_TRADE};
+  market_controller->unsubscribe_from(req2);
+
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
+  for (auto &elem : market_controller->get_list_of_subscriptions()) {
+    Log::log(elem.symbol);
+  }
   */
   // UserDataStream test
-  /*
-    Queue<std::string> msgQueueUser;
-    std::unique_ptr<UserDataStream> ustream =
-        std::make_unique<UserDataStream>(msgQueueUser);
-    ustream->connect_to_websocket();
+  Queue<std::string> msgQueueUser;
+  std::unique_ptr<UserDataStream> ustream =
+      std::make_unique<UserDataStream>(msgQueueUser);
+  ustream->connect_to_websocket();
 
-    Thread thread11;
-    Thread thread22;
-    thread11.start(&UserDataStream::start_listening, ustream.get());
+  Thread thread11;
+  Thread thread22;
+  thread11.start(&UserDataStream::start_listening, ustream.get());
 
-    thread22
-        .start([&msgQueueUser]() {
-          while (true) {
-            std::string out_msg;
-            bool res = msgQueueUser.pop_message(out_msg);
-            if (res) {
-              Log::log(out_msg);
-            }
+  thread22
+      .start([&msgQueueUser]() {
+        while (true) {
+          std::string out_msg;
+          bool res = msgQueueUser.pop_message(out_msg);
+          if (res) {
+            Log::log("USERDATA: " + out_msg);
           }
-        })
-        .detach();
-        */
+        }
+      })
+      .detach();
   /*
   // Fixed num test
   Fixed num(123.1232434, 2);
@@ -164,28 +178,22 @@ int main(int argc, char *argv[]) {
   Log::log((num > num2) ? "true" : "false");
 */
   // TradingStream test
-  /*
-  Queue<std::string> msgQueue;
-  std::unique_ptr<TradingStream> stream =
-      std::make_unique<TradingStream>(msgQueue);
-  stream->connect_to_websocket();
+  std::unique_ptr<Trading::TradingStreamController> trading_controller =
+      std::make_unique<Trading::TradingStreamController>();
 
-  Thread thread1;
-  Thread thread2;
-  thread1.start(&TradingStream::start_listening, stream.get()).detach();
+  Trading::TradeRequest req(ORDER_SIDE::BUY, POSITION_SIDE::BOTH,
+                            ORDER_TYPE::MARKET, "SOLUSDT",
+                            Fixed::str_to_fixed("0.10"));
 
-  thread2
-      .start([&msgQueue]() {
-        while (true) {
-          std::string out_msg;
-          bool res = msgQueue.pop_message(out_msg);
-          if (res) {
-            Log::log(out_msg);
-          }
-        }
-      })
-      .detach();
-*/
+  trading_controller->create_order(req);
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+  trading_controller->get_order_status(req);
+
+  std::this_thread::sleep_for(std::chrono::seconds(3));
+
+  req.setReduceOnly(true);
+  req.setOrderSide(ORDER_SIDE::SELL);
+  trading_controller->create_order(req);
   /*
   std::optional<JSONQuery> balance_info =
       TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD::ACCOUNT_BALANCE)
@@ -206,25 +214,6 @@ int main(int argc, char *argv[]) {
   if (pos_info) {
     stream->execute_query(pos_info.value());
   }
-  */
-  /*
-    std::optional<JSONQuery> param_query =
-        ParametersBuilder()
-            .add_side(ORDER_SIDE::BUY)
-            .add_positionSide(POSITION_SIDE::BOTH)
-            .add_quantity(Fixed::str_to_fixed("0.11"))
-            .add_symbol("SOLUSDT")
-            .add_type(ORDER_TYPE::MARKET)
-            .commit();
-
-    std::optional<JSONQuery> subscribe_query =
-        TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD::ORDER_PLACE)
-            .add_borderless_params(param_query.value())
-            .commit();
-
-    if (subscribe_query) {
-      stream->execute_query(subscribe_query.value());
-    }
   */
   /*
   std::optional<JSONQuery> sub_query =

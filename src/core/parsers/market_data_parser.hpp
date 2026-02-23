@@ -2,6 +2,7 @@
 #define MARKET_DATA_PARSER_HPP
 
 #include "core/controllers/market_data_utils.hpp"
+#include "core/parsers/common_parser_utils.hpp"
 #include "core/utils/constants.hpp"
 #include "core/utils/fixed_num.hpp"
 
@@ -10,6 +11,8 @@
 #include <sys/types.h>
 #include <utility>
 #include <variant>
+
+namespace Market {
 
 struct TradeData {
   MARKET_DATA_TYPE eventType = MARKET_DATA_TYPE::TRADE; // e
@@ -76,10 +79,6 @@ struct BookTickerData {
   Fixed bestAskQty;         // A
   uint64_t transactionTime; // T
   uint64_t eventTime;       // E
-};
-
-struct ErrorParse {
-  std::string parse_error = "";
 };
 
 using ParsedMarketData = std::variant<TradeData, AggTradeData, MarkPriceData,
@@ -169,6 +168,8 @@ public:
 private:
   static MARKET_DATA_TYPE _detect_msg_type(const StreamMessage &msg);
 };
+
+} // namespace Market
 
 #endif // MARKET_DATA_PARSER_HPP
 

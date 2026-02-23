@@ -21,6 +21,8 @@ public:
   ParametersBuilder &add_side(const ORDER_SIDE &side);
   ParametersBuilder &add_timeInForce(const TIME_IN_FORCE &timeInForce);
   ParametersBuilder &add_type(const ORDER_TYPE &type);
+  ParametersBuilder &add_clientOrderId(const std::string &clientOrderId);
+  ParametersBuilder &add_reduceOnly(bool reduceOnly);
 
   // Algo params
   ParametersBuilder &add_algoType(const ORDER_TYPE &type);
@@ -29,6 +31,7 @@ public:
 
   // Additional params
   ParametersBuilder &add_orderId(int64_t orderId);
+  ParametersBuilder &add_origClientOrderId(const std::string &clientOrderId);
   ParametersBuilder &add_priceMatch(const std::string &priceMatch);
   ParametersBuilder &add_origType(const ORDER_TYPE &type);
 
@@ -64,7 +67,7 @@ private:
 }
 */
 
-enum class USER_DATA_STREAM_METHOD : uint16_t {
+enum class TRADE_STREAM_METHOD : uint16_t {
   INVALID_METHOD = 0x0000,
   SESSION_STATUS = 0x0001,
   SESSION_LOGOUT,
@@ -84,7 +87,7 @@ enum class USER_DATA_STREAM_METHOD : uint16_t {
   // TODO: Think about REST API methods
 };
 
-enum class USER_DATA_METHOD_GROUP : uint16_t {
+enum class TRADE_METHOD_GROUP : uint16_t {
   NO_PARAMS = 0x0001,
   PARAMS_ONLY = 0x0100,
   BOUNDLESS_PARAMS = 0x0200
@@ -94,19 +97,20 @@ class TradingStreamQueryBuilder {
 /* Static API */ public:
   static bool is_query_valid(const JSONQuery &query);
 
-  static bool is_params_required(const USER_DATA_STREAM_METHOD &method);
-  static bool
-  is_boundless_params_required(const USER_DATA_STREAM_METHOD &method);
+  static bool is_params_required(const TRADE_STREAM_METHOD &method);
+  static bool is_boundless_params_required(const TRADE_STREAM_METHOD &method);
 
 public:
-  explicit TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD method);
+  explicit TradingStreamQueryBuilder(TRADE_STREAM_METHOD method);
   TradingStreamQueryBuilder() = delete;
 
-  TradingStreamQueryBuilder &setMethod(USER_DATA_STREAM_METHOD method);
+  TradingStreamQueryBuilder &setMethod(TRADE_STREAM_METHOD method);
 
   std::optional<JSONQuery> commit();
 
   TradingStreamQueryBuilder &add_borderless_params(const JSONQuery &query);
+
+  void cleanup() { _cleanup(); }
 
 private:
   void _init_query();
@@ -134,25 +138,25 @@ private:
   static constexpr std::array<std::string_view, 3> PARAMS_REQUIREMENTS{
       PARAM_APIKEY, PARAM_SIGNATURE, PARAM_TIMESTAMP};
 
-  static constexpr std::array<EnumStringPair<USER_DATA_STREAM_METHOD>, 13>
+  static constexpr std::array<EnumStringPair<TRADE_STREAM_METHOD>, 13>
       METHOD_NAMES{{
-          {USER_DATA_STREAM_METHOD::INVALID_METHOD, "invalid.method"},
-          {USER_DATA_STREAM_METHOD::SESSION_STATUS, "session.status"},
-          {USER_DATA_STREAM_METHOD::SESSION_LOGOUT, "session.logout"},
-          {USER_DATA_STREAM_METHOD::SESSION_LOGON, "session.logon"},
-          {USER_DATA_STREAM_METHOD::ORDER_PLACE, "order.place"},
-          {USER_DATA_STREAM_METHOD::ORDER_MODIFY, "order.modify"},
-          {USER_DATA_STREAM_METHOD::ORDER_CANCEL, "order.cancel"},
-          {USER_DATA_STREAM_METHOD::ORDER_STATUS, "order.status"},
-          {USER_DATA_STREAM_METHOD::ALGO_ORDER_PLACE, "algoOrder.place"},
-          {USER_DATA_STREAM_METHOD::ALGO_ORDER_CANCEL, "algoOrder.cancel"},
-          {USER_DATA_STREAM_METHOD::ACCOUNT_POSITION, "account.position"},
-          {USER_DATA_STREAM_METHOD::ACCOUNT_STATUS, "account.status"},
-          {USER_DATA_STREAM_METHOD::ACCOUNT_BALANCE, "account.balance"},
+          {TRADE_STREAM_METHOD::INVALID_METHOD, "invalid.method"},
+          {TRADE_STREAM_METHOD::SESSION_STATUS, "session.status"},
+          {TRADE_STREAM_METHOD::SESSION_LOGOUT, "session.logout"},
+          {TRADE_STREAM_METHOD::SESSION_LOGON, "session.logon"},
+          {TRADE_STREAM_METHOD::ORDER_PLACE, "order.place"},
+          {TRADE_STREAM_METHOD::ORDER_MODIFY, "order.modify"},
+          {TRADE_STREAM_METHOD::ORDER_CANCEL, "order.cancel"},
+          {TRADE_STREAM_METHOD::ORDER_STATUS, "order.status"},
+          {TRADE_STREAM_METHOD::ALGO_ORDER_PLACE, "algoOrder.place"},
+          {TRADE_STREAM_METHOD::ALGO_ORDER_CANCEL, "algoOrder.cancel"},
+          {TRADE_STREAM_METHOD::ACCOUNT_POSITION, "account.position"},
+          {TRADE_STREAM_METHOD::ACCOUNT_STATUS, "account.status"},
+          {TRADE_STREAM_METHOD::ACCOUNT_BALANCE, "account.balance"},
       }};
 
 private:
-  USER_DATA_STREAM_METHOD m_method;
+  TRADE_STREAM_METHOD m_method;
   std::string m_methodStr;
 
   static int s_requestId;

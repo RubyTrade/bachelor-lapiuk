@@ -4,7 +4,6 @@
 #include "core/controllers/market_data_utils.hpp"
 #include "core/parsers/market_data_parser.hpp"
 #include "core/stream/market_stream.hpp"
-#include "core/utils/constants.hpp"
 #include "core/utils/json.hpp"
 #include "core/utils/queue.hpp"
 #include "core/utils/thread.hpp"
@@ -15,24 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-struct MarketRequest {
-  static int req_id;
-  std::string symbol;
-  MARKET_DATA_TYPE type;
-
-  // Optional fields
-  bool fast_update = true;
-  MarketStreamQueryBuilder::DEPTH_LEVELS depth_levels{
-      MarketStreamQueryBuilder::DEPTH_LEVELS::SMALL};
-
-  MarketRequest(const std::string &s, MARKET_DATA_TYPE t) : symbol(s), type(t) {
-    ++req_id;
-  }
-
-  bool operator==(const MarketRequest &other) const {
-    return req_id == other.req_id;
-  }
-};
+namespace Market {
 
 class SubscriptionsList {
 public:
@@ -95,8 +77,12 @@ private:
   // Async subscriptions
   SubscriptionsList m_subList;
 
-  std::unordered_map<std::string, MarketRequest> m_pendingReq;
+  std::unordered_map<std::string,
+                     std::pair<MarketRequest, MARKET_STREAM_METHOD>>
+      m_pendingReq;
   std::mutex m_pendingReqMtx;
 };
+
+} // namespace Market
 
 #endif // MARKET_DATA_CONTROLLER_HPP

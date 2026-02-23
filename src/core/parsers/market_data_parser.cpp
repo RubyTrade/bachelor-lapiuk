@@ -3,6 +3,8 @@
 #include "core/utils/helper_utils.hpp"
 #include "core/utils/json.hpp"
 
+using namespace Market;
+
 /* static */ ParsedMarketData
 MarketDataParser::parse(const StreamMessage &msg) {
   if (msg.stream.empty() || msg.data.is_empty())
@@ -55,7 +57,8 @@ MarketDataParser::_detect_msg_type(const StreamMessage &msg) {
     return ErrorParse{"tradeTime is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(SYMBOL)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(SYMBOL));
+      val && val->is_string()) {
     data.symbol = val->get<std::string>();
   } else {
     return ErrorParse{"symbol is not parsed"};
@@ -68,7 +71,8 @@ MarketDataParser::_detect_msg_type(const StreamMessage &msg) {
     return ErrorParse{"tradeId is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(PRICE)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(PRICE));
+      val && val->is_string()) {
     const std::string &priceStr = val->get_ref<const std::string &>();
     data.price = Fixed::str_to_fixed(priceStr);
   } else {
@@ -83,7 +87,8 @@ MarketDataParser::_detect_msg_type(const StreamMessage &msg) {
     return ErrorParse{"quantity is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(ORDER_T)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(ORDER_T));
+      val && val->is_string()) {
     const std::string &orderTypeStr = val->get_ref<const std::string &>();
     ORDER_TYPE type = str_to_type(ORDER_TYPE_STR, orderTypeStr);
     data.orderType = type;
@@ -120,13 +125,15 @@ AggTradeDataParser::parse(const StreamMessage &msg) {
     return ErrorParse{"aggTradeId is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(SYMBOL)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(SYMBOL));
+      val && val->is_string()) {
     data.symbol = val->get<std::string>();
   } else {
     return ErrorParse{"symbol is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(PRICE)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(PRICE));
+      val && val->is_string()) {
     const std::string &priceStr = val->get_ref<const std::string &>();
     data.price = Fixed::str_to_fixed(priceStr);
   } else {
@@ -192,7 +199,8 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
     return ErrorParse{"eventTime is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(SYMBOL)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(SYMBOL));
+      val && val->is_string()) {
     data.symbol = val->get<std::string>();
   } else {
     return ErrorParse{"symbol is not parsed"};
@@ -258,7 +266,8 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
     return ErrorParse{"transactionTime is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(SYMBOL)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(SYMBOL));
+      val && val->is_string()) {
     data.symbol = val->get<std::string>();
   } else {
     return ErrorParse{"symbol is not parsed"};
@@ -285,7 +294,8 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
     return ErrorParse{"finalUpdtIdLastStream is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(BIDS)); val && val->is_array()) {
+  if (auto val = jsonData.get_value(std::string(BIDS));
+      val && val->is_array()) {
     for (const auto &entry : val->get<nlohmann::json>()) {
       if (entry.is_array() && entry.size() == 2) {
         const std::string &priceStr = entry[0].get_ref<const std::string &>();
@@ -298,7 +308,8 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
     return ErrorParse{"bids are not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(ASKS)); val && val->is_array()) {
+  if (auto val = jsonData.get_value(std::string(ASKS));
+      val && val->is_array()) {
     for (const auto &entry : val->get<nlohmann::json>()) {
       if (entry.is_array() && entry.size() == 2) {
         const std::string &priceStr = entry[0].get_ref<const std::string &>();
@@ -326,7 +337,8 @@ BookTickerDataParser::parse(const StreamMessage &msg) {
     return ErrorParse{"orderBookId is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(SYMBOL)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(SYMBOL));
+      val && val->is_string()) {
     data.symbol = val->get<std::string>();
   } else {
     return ErrorParse{"symbol is not parsed"};
@@ -340,21 +352,24 @@ BookTickerDataParser::parse(const StreamMessage &msg) {
     return ErrorParse{"bestBidPrice is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(BID_QTY)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(BID_QTY));
+      val && val->is_string()) {
     const std::string &str = val->get_ref<const std::string &>();
     data.bestBidQty = Fixed::str_to_fixed(str);
   } else {
     return ErrorParse{"bestBidQty is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(ASK_PRICE)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(ASK_PRICE));
+      val && val->is_string()) {
     const std::string &str = val->get_ref<const std::string &>();
     data.bestAskPrice = Fixed::str_to_fixed(str);
   } else {
     return ErrorParse{"bestAskPrice is not parsed"};
   }
 
-  if (auto val = jsonData.get_value(std::string(ASK_QTY)); val && val->is_string()) {
+  if (auto val = jsonData.get_value(std::string(ASK_QTY));
+      val && val->is_string()) {
     const std::string &str = val->get_ref<const std::string &>();
     data.bestAskQty = Fixed::str_to_fixed(str);
   } else {
