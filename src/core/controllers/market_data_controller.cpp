@@ -15,7 +15,7 @@
 #include <string>
 #include <utility>
 
-int MarketRequest::req_id = 0;
+using namespace Market;
 
 MarketDataController::MarketDataController()
     : m_queryBuilder(std::make_unique<MarketStreamQueryBuilder>(
@@ -100,7 +100,8 @@ bool MarketDataController::subscribe_to(const MarketRequest &req) {
 
     {
       std::lock_guard<std::mutex> lock(m_pendingReqMtx);
-      m_pendingReq.emplace(id_str, req);
+      m_pendingReq.emplace(
+          id_str, std::make_pair(req, MARKET_STREAM_METHOD::SUBSCRIBE));
     }
 
     NetError netErr = m_marketStream->execute_query(query.value());
@@ -149,12 +150,12 @@ bool MarketDataController::unsubscribe_from(const MarketRequest &req) {
 
     {
       std::lock_guard<std::mutex> lock(m_pendingReqMtx);
-      m_pendingReq.emplace(id_str, req);
+      m_pendingReq.emplace(
+          id_str, std::make_pair(req, MARKET_STREAM_METHOD::UNSUBSCRIBE));
     }
 
     NetError netErr = m_marketStream->execute_query(query.value());
     if (!netErr.hasError()) {
-      m_subList.remove_from_list(req);
       return true;
     }
   }
@@ -178,7 +179,7 @@ void MarketDataController::_start_buffer_reading() {
     std::string out_msg;
     bool res = m_marketMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {
-      Log::log(out_msg);
+      Log::log("MARKETDATA" + out_msg);
 
       _parse_msg(std::move(out_msg));
     }
@@ -205,8 +206,12 @@ void MarketDataController::_fulfill_pending_result(const ResultMessage &msg) {
   if (it == m_pendingReq.end())
     return;
 
-  if (msg.isSuccessResult)
-    m_subList.add_to_list(it->second);
+  if (msg.isSuccessResult) {
+    if (it->second.second == MARKET_STREAM_METHOD::SUBSCRIBE)
+      m_subList.add_to_list(it->second.first);
+    else if (it->second.second == MARKET_STREAM_METHOD::UNSUBSCRIBE)
+      m_subList.remove_from_list(it->second.first);
+  }
 
   m_pendingReq.erase(it);
 }

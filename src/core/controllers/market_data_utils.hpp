@@ -1,8 +1,12 @@
 #ifndef MARKET_DATA_UTILS_HPP
 #define MARKET_DATA_UTILS_HPP
 
+#include "core/stream/market_stream.hpp"
+#include "core/utils/constants.hpp"
 #include "core/utils/json.hpp"
 #include <string>
+
+namespace Market {
 
 enum class MESSAGE_TYPE { STREAM, RESULT, ERROR, UNKNOWN };
 
@@ -62,5 +66,30 @@ struct UnknownMessage : IMarketMessage {
 
   JSONQuery data;
 };
+
+struct MarketRequest {
+  std::string symbol;
+  MARKET_DATA_TYPE type;
+
+  // Optional fields
+  bool fast_update = true;
+  MarketStreamQueryBuilder::DEPTH_LEVELS depth_levels{
+      MarketStreamQueryBuilder::DEPTH_LEVELS::SMALL};
+
+public:
+  MarketRequest(const std::string &s, MARKET_DATA_TYPE t)
+      : symbol(s), type(t) {}
+
+  bool operator==(const MarketRequest &other) const {
+    return getRequestSignature(*this) == getRequestSignature(other);
+  }
+
+private:
+  static std::string getRequestSignature(const MarketRequest &req) {
+    return req.symbol + "@" + type_to_str(MARKET_DATA_TYPE_STR, req.type);
+  }
+};
+
+} // namespace Market
 
 #endif // MARKET_DATA_UTILS_HPP
