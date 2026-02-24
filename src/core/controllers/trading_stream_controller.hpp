@@ -35,6 +35,8 @@ public:
   bool cancel_order(const TradeRequest &req);
   bool get_order_status(const TradeRequest &req);
 
+  // TODO: support more requests
+
 private:
   void _start_listen_thread();
   void _start_read_thread();

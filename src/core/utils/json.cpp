@@ -31,6 +31,7 @@ void JSONQuery::add_to_array(const std::string &key, const JSONValue &value) {
       value);
 }
 
+// TODO: optimize get_value with string_view
 std::optional<nlohmann::json>
 JSONQuery::get_value(const std::string &key) const {
   if (!m_jsonQuery.contains(key))

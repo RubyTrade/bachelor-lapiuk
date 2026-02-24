@@ -36,10 +36,10 @@ struct ResultMessage {
   std::string error_msg{};
   JSONQuery result_msg{};
 
-  ResultMessage(const std::string _id, uint16_t _code)
+  ResultMessage(const std::string &_id, uint16_t _code)
       : id(_id), http_code(_code) {}
 
-  bool isSuccess() const { return http_code == MsgKeys::SUCCESS_CODE; }
+  bool isSuccess() const { return type == MESSAGE_TYPE::SUCCESS; }
 };
 
 struct TradeRequest {

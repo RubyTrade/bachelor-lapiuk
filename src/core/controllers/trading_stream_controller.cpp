@@ -95,6 +95,11 @@ void TradingStreamController::_parse_msg(const std::string &&msg) {
 
   ResultMessage res{idStr, statusCode};
 
+  if (statusCode == MsgKeys::SUCCESS_CODE)
+    res.type = MESSAGE_TYPE::SUCCESS;
+  else
+    res.type = MESSAGE_TYPE::ERROR;
+
   if (res.isSuccess()) {
     auto keyVal = jsonMsg.get_value(std::string(MsgKeys::RESULT));
 
@@ -124,11 +129,11 @@ void TradingStreamController::_parse_msg(const std::string &&msg) {
       return;
 
     auto codeVal = errJson.get_value(std::string(MsgKeys::CODE));
-    int errCode = (codeVal && codeVal->is_number() ? status->get<int>() : 0);
+    int errCode = (codeVal && codeVal->is_number() ? codeVal->get<int>() : 0);
 
     auto errMsgVal = errJson.get_value(std::string(MsgKeys::MSG));
     std::string errMsgStr = (errMsgVal && errMsgVal->is_string()
-                                 ? status->get<std::string>()
+                                 ? errMsgVal->get<std::string>()
                                  : std::string(MsgKeys::DEFAULT_VAL));
 
     res.error_code = errCode;

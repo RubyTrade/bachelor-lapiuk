@@ -11,6 +11,7 @@
 
 #include "core/controllers/market_data_controller.hpp"
 #include "core/controllers/trading_stream_controller.hpp"
+#include "core/controllers/user_data_stream_controller.hpp"
 #include "core/net/net.hpp"
 #include "core/parsers/market_data_parser.hpp"
 #include "core/stream/market_stream.hpp"
@@ -23,6 +24,103 @@
 #include "core/utils/log.hpp"
 #include "core/utils/thread.hpp"
 #include "core/utils/time.hpp"
+
+void test_user_data_parsing() {
+  using namespace UserData;
+
+  struct TestCase {
+    std::string jsonStr;
+    std::string
+        expectedType; // "TradeLite", "OrderTradeUpdate", "AccountUpdate"
+  };
+
+  std::vector<TestCase> testCases = {
+
+      // --- TRADE_LITE
+      {R"({"e":"TRADE_LITE","E":1771856732584,"T":1771856732584,"s":"SOLUSDT","q":"0.10","p":"0.0000","m":false,"c":"SOLUSDT_BOTH_1771856732181_1","S":"BUY","L":"80.1900","l":"0.10","t":3181138052,"i":199033476993})",
+       "TradeLite"},
+
+      // --- ORDER_TRADE_UPDATE
+      {R"({"e":"ORDER_TRADE_UPDATE","T":1771856732584,"E":1771856732584,"o":{"s":"SOLUSDT","c":"SOLUSDT_BOTH_1771856732181_1","S":"BUY","o":"MARKET","f":"GTC","q":"0.1","p":"0","ap":"0","sp":"0","x":"NEW","X":"NEW","i":199033476993,"l":"0","z":"0","L":"0","n":"0","N":"USDT","T":1771856732584,"t":0,"b":"0","a":"0","m":false,"R":false,"wt":"CONTRACT_PRICE","ot":"MARKET","ps":"BOTH","cp":false,"rp":"0","pP":false,"si":0,"ss":0,"V":"EXPIRE_MAKER","pm":"NONE","gtd":0,"er":"0"}})",
+       "OrderTradeUpdate"},
+
+      // --- ACCOUNT_UPDATE
+      {R"({"e":"ACCOUNT_UPDATE","T":1771856732584,"E":1771856732584,"a":{"B":[{"a":"USDT","wb":"1.73744723","cw":"1.73744723","bc":"0"}],"P":[{"s":"SOLUSDT","pa":"0.1","ep":"80.19","cr":"26.83159999","up":"0","mt":"cross","iw":"0","ps":"BOTH","ma":"USDT","bep":"80.230095"}],"m":"ORDER"}})",
+       "AccountUpdate"}};
+
+  for (auto &tc : testCases) {
+
+    JSONQuery jsonMsg(tc.jsonStr);
+
+    auto typeVal = jsonMsg.get_value(std::string(MsgKeys::EVENT_TYPE));
+
+    std::string typeStr =
+        (typeVal && typeVal->is_string() ? typeVal->get<std::string>() : "");
+
+    if (typeStr.empty())
+      return;
+
+    USER_DATA_EVENT_TYPE eventType =
+        str_to_type(USER_DATA_EVENT_TYPE_STR, typeStr);
+
+    StreamMessage msg{eventType, jsonMsg};
+
+    ParsedUserData parsedMsg = UserDataStreamParser::parse(msg);
+
+    std::cout << "Testing event: " << typeStr << " -> ";
+
+    if (tc.expectedType == "TradeLite" &&
+        std::holds_alternative<TradeLiteEvent>(parsedMsg))
+      std::cout << "PASS\n";
+
+    else if (tc.expectedType == "OrderTradeUpdate" &&
+             std::holds_alternative<OrderTradeUpdateEvent>(parsedMsg))
+      std::cout << "PASS\n";
+
+    else if (tc.expectedType == "AccountUpdate" &&
+             std::holds_alternative<AccountUpdateEvent>(parsedMsg))
+      std::cout << "PASS\n";
+
+    else
+      std::cout << "FAIL\n";
+  }
+
+  // --- ERROR TESTS
+  std::vector<std::string> errorTests = {
+
+      // TRADE_LITE broken
+      R"({"e":"TRADE_LITE","s":"SOLUSDT"})",
+
+      // ORDER_TRADE_UPDATE without "o"
+      R"({"e":"ORDER_TRADE_UPDATE"})",
+
+      // ACCOUNT_UPDATE without "a"
+      R"({"e":"ACCOUNT_UPDATE"})"};
+
+  for (auto &js : errorTests) {
+    JSONQuery jsonMsg(js);
+
+    auto typeVal = jsonMsg.get_value(std::string(MsgKeys::EVENT_TYPE));
+
+    std::string typeStr =
+        (typeVal && typeVal->is_string() ? typeVal->get<std::string>() : "");
+
+    if (typeStr.empty())
+      return;
+
+    USER_DATA_EVENT_TYPE eventType =
+        str_to_type(USER_DATA_EVENT_TYPE_STR, typeStr);
+
+    StreamMessage msg{eventType, jsonMsg};
+
+    ParsedUserData parsedMsg = UserDataStreamParser::parse(msg);
+
+    if (std::holds_alternative<ErrorParse>(parsedMsg))
+      std::cout << "Error test PASS\n";
+    else
+      std::cout << "Error test FAIL\n";
+  }
+}
 
 void test_market_data_parsing() {
   using namespace Market;
@@ -79,14 +177,9 @@ void test_market_data_parsing() {
       std::cout << "FAIL\n";
   }
 
-  // Тести на помилку
   std::vector<std::string> errorTests = {
-      R"({"stream":"btcusdt@trade","data":{"E":1771263510064}})", // немає
-                                                                  // symbol,
-                                                                  // tradeId,
-                                                                  // price
-      R"({"stream":"btcusdt@markPrice@1s","data":{"E":1771263510000,"s":"BTCUSDT"}})" // немає markPrice
-  };
+      R"({"stream":"btcusdt@trade","data":{"E":1771263510064}})",
+      R"({"stream":"btcusdt@markPrice@1s","data":{"E":1771263510000,"s":"BTCUSDT"}})"};
 
   for (auto &js : errorTests) {
     JSONQuery jsonMsg(js);
@@ -128,6 +221,7 @@ int main(int argc, char *argv[]) {
   // MarketStream test
 
   // test_market_data_parsing();
+  // test_user_data_parsing();
 
   /*
   std::unique_ptr<Market::MarketDataController> market_controller =
@@ -148,26 +242,9 @@ int main(int argc, char *argv[]) {
   }
   */
   // UserDataStream test
-  Queue<std::string> msgQueueUser;
-  std::unique_ptr<UserDataStream> ustream =
-      std::make_unique<UserDataStream>(msgQueueUser);
-  ustream->connect_to_websocket();
+  std::unique_ptr<UserData::UserDataStreamController> userdata_controller =
+      std::make_unique<UserData::UserDataStreamController>();
 
-  Thread thread11;
-  Thread thread22;
-  thread11.start(&UserDataStream::start_listening, ustream.get());
-
-  thread22
-      .start([&msgQueueUser]() {
-        while (true) {
-          std::string out_msg;
-          bool res = msgQueueUser.pop_message(out_msg);
-          if (res) {
-            Log::log("USERDATA: " + out_msg);
-          }
-        }
-      })
-      .detach();
   /*
   // Fixed num test
   Fixed num(123.1232434, 2);

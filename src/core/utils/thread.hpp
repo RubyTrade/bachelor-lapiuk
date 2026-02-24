@@ -34,15 +34,18 @@ public:
     return *this;
   }
 
-  ~Thread() {
+  void stop() {
     if (m_isRunning) {
       m_isRunning = false;
       if (m_thread.joinable())
         m_thread.join();
     }
   }
+
+  ~Thread() { stop(); }
 };
 
+// TODO: deprecate this ThreadUtils?
 namespace ThreadUtils {
 
 inline void sleepForSecs(int secs) {
