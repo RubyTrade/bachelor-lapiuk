@@ -1,12 +1,14 @@
 #include "user_data_stream_controller.hpp"
 #include "core/controllers/user_data_stream_utils.hpp"
+#include "core/parsers/common_parser_utils.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
 #include "core/stream/user_data_stream.hpp"
 #include "core/utils/constants.hpp"
 #include "core/utils/dotenv.hpp"
 #include "core/utils/helper_utils.hpp"
 #include "core/utils/queue.hpp"
-#include <list>
+#include <execution>
+#include <variant>
 
 using namespace UserData;
 
@@ -18,7 +20,8 @@ UserDataStreamController::UserDataStreamController()
       m_userDataMsgQueues(std::make_unique<MessageStreams>()),
       m_parsedStreamData(std::make_unique<Queue<ParsedUserData>>()),
       m_http_session_manager(Net::init_http_session_manager()),
-      m_key_timer(std::make_unique<AsyncTimer>()) {
+      m_key_timer(std::make_unique<AsyncTimer>()),
+      m_eventPublisher(std::make_unique<UserEventPublisher>()) {
   // User Data Stream init
   m_userDataStream =
       std::make_unique<UserDataStream>(m_userDataMsgQueues->msgQueue);
@@ -56,10 +59,25 @@ UserDataStreamController::UserDataStreamController()
           }
 
         } else {
-          m_parsedStreamData->push_message(UserDataStreamParser::parse(msg));
+          ParsedUserData parsedMsg = UserDataStreamParser::parse(msg);
+          if (!std::holds_alternative<ErrorParse>(parsedMsg)) {
+            m_eventPublisher->publish(parsedMsg);
+          }
+
+          m_parsedStreamData->push_message(std::move(parsedMsg));
         }
       });
 };
+
+void UserDataStreamController::subscribe_to_publisher(
+    IUserEventListener *listener) {
+  m_eventPublisher->subscribe(listener);
+}
+
+void UserDataStreamController::unsubscribe_from_publisher(
+    IUserEventListener *listener) {
+  m_eventPublisher->unsubscribe(listener);
+}
 
 std::string UserDataStreamController::_create_listenKey() {
   std::string listenKey{};

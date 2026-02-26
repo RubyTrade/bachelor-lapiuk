@@ -3,6 +3,7 @@
 
 #include "core/utils/constants.hpp"
 #include "core/utils/fixed_num.hpp"
+#include "core/utils/helper_utils.hpp"
 #include "core/utils/json.hpp"
 
 #include <chrono>
@@ -56,32 +57,39 @@ struct TradeRequest {
 
 private:
   std::string clientOrderId;
+  static int s_unique_id_counter;
 
 public:
   TradeRequest(ORDER_SIDE o_side, POSITION_SIDE p_side, ORDER_TYPE o_type,
                const std::string &s, const Fixed &qty, const Fixed &p = {0})
       : order_side(o_side), position_side(p_side), order_type(o_type),
         symbol(s), quantity(qty), price(p) {
-    static int unique_id_counter = 0;
-    auto now = std::chrono::system_clock::now();
-    uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          now.time_since_epoch())
-                          .count();
-    clientOrderId = symbol + "_" + type_to_str(POSITION_SIDE_STR, p_side) +
-                    "_" + std::to_string(now_ms) + "_" +
-                    std::to_string(++unique_id_counter);
+    _generateClientOrderId();
   }
 
+  // TODO: decide if needed
   void setOrderSide(ORDER_SIDE side) { order_side = side; };
   void setPositionSide(POSITION_SIDE side) { position_side = side; };
   void setOrderType(ORDER_TYPE type) { order_type = type; };
   void setOrderSide(std::string s) { symbol = s; };
   void setQuantity(const Fixed &q) { quantity = q; };
-  void setTimeInForce(TIME_IN_FORCE tif) { timeInForce = tif; }
   void setPrice(const Fixed &p) { price = p; }
+
+  void setTimeInForce(TIME_IN_FORCE tif) { timeInForce = tif; }
   void setReduceOnly(bool reduce) { reduceOnly = true; }
 
   std::string getClientOrderId() const { return clientOrderId; }
+
+  void _generateClientOrderId() {
+    auto now = std::chrono::system_clock::now();
+    uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          now.time_since_epoch())
+                          .count();
+    clientOrderId =
+        symbol + "_" + type_to_str(POSITION_SIDE_STR, position_side) + "_" +
+        std::to_string(now_ms) + "_" + type_to_str(ORDER_SIDE_STR, order_side) +
+        "_" + std::to_string(++s_unique_id_counter);
+  }
 
   bool operator==(const TradeRequest &other) const {
     return clientOrderId == other.getClientOrderId();

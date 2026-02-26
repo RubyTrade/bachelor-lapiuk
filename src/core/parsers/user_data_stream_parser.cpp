@@ -31,6 +31,17 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
   JSONQuery jsonData = msg.data;
   OrderTradeUpdateEvent data;
 
+  // --- TOP LEVEL TIME ---
+  if (auto val = jsonData.get_value(std::string(EVENT_TIME));
+      val && val->is_number_unsigned()) {
+    data.eventTime = val->get<uint64_t>();
+  }
+
+  if (auto val = jsonData.get_value(std::string(TRANSACTION_TIME));
+      val && val->is_number_unsigned()) {
+    data.transactionTime = val->get<uint64_t>();
+  }
+
   auto orderVal = jsonData.get_value(std::string(ORDER));
   if (!orderVal || !orderVal->is_object()) {
     return ErrorParse{"order object is not parsed"};
@@ -38,6 +49,7 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
 
   JSONQuery orderJson = *orderVal;
 
+  // --- REQUIRED ---
   if (auto val = orderJson.get_value(std::string(ORDER_ID));
       val && val->is_number_unsigned()) {
     data.orderId = val->get<uint64_t>();
@@ -63,29 +75,15 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
       val && val->is_string()) {
     data.status =
         str_to_type(ORDER_STATUS_STR, val->get_ref<const std::string &>());
-  } else {
-    return ErrorParse{"status is not parsed"};
   }
-  struct AccountConfigUpdateEvent {
-    USER_DATA_EVENT_TYPE eventType =
-        USER_DATA_EVENT_TYPE::ACCOUNT_CONFIG_UPDATE;
 
-    struct LeverageUpdate {
-      std::string symbol{};
-      uint32_t leverage = 0;
-    };
+  if (auto val = orderJson.get_value(std::string(EXECUTION_TYPE));
+      val && val->is_string()) {
+    data.executionType =
+        str_to_type(EXECUTION_TYPE_STR, val->get_ref<const std::string &>());
+  }
 
-    struct MultiAssetModeUpdate {
-      bool multiAssetsMode = false;
-    };
-
-    std::optional<LeverageUpdate> leverageUpdate;
-    std::optional<MultiAssetModeUpdate> multiAssetModeUpdate;
-
-    uint64_t eventTime = 0;
-    uint64_t transactionTime = 0;
-  };
-
+  // --- PRICE ---
   if (auto val = orderJson.get_value(std::string(PRICE));
       val && val->is_string()) {
     data.price = Fixed::str_to_fixed(val->get_ref<const std::string &>());
@@ -101,6 +99,12 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
     data.stopPrice = Fixed::str_to_fixed(val->get_ref<const std::string &>());
   }
 
+  if (auto val = orderJson.get_value(std::string(LAST_PRICE));
+      val && val->is_string()) {
+    data.lastPrice = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+  }
+
+  // --- QTY ---
   if (auto val = orderJson.get_value(std::string(ORIG_QTY));
       val && val->is_string()) {
     data.origQty = Fixed::str_to_fixed(val->get_ref<const std::string &>());
@@ -122,6 +126,45 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
     data.cumQuote = Fixed::str_to_fixed(val->get_ref<const std::string &>());
   }
 
+  // --- FEES ---
+  if (auto val = orderJson.get_value(std::string(COMMISSION));
+      val && val->is_string()) {
+    data.commission = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+  }
+
+  if (auto val = orderJson.get_value(std::string(COMMISSION_ASSET));
+      val && val->is_string()) {
+    data.commissionAsset = val->get<std::string>();
+  }
+
+  // --- PNL ---
+  if (auto val = orderJson.get_value(std::string(REALIZED_PNL));
+      val && val->is_string()) {
+    data.realizedPnL = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+  }
+
+  // --- TRADE INFO ---
+  if (auto val = orderJson.get_value(std::string(TRADE_ID));
+      val && val->is_number_unsigned()) {
+    data.tradeId = val->get<uint64_t>();
+  }
+
+  if (auto val = orderJson.get_value(std::string(IS_MAKER));
+      val && val->is_boolean()) {
+    data.isMaker = val->get<bool>();
+  }
+
+  if (auto val = orderJson.get_value(std::string(BID_NOTIONAL));
+      val && val->is_string()) {
+    data.bidNotional = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+  }
+
+  if (auto val = orderJson.get_value(std::string(ASK_NOTIONAL));
+      val && val->is_string()) {
+    data.askNotional = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+  }
+
+  // --- TYPES ---
   if (auto val = orderJson.get_value(std::string(TIME_IN_FORCE));
       val && val->is_string()) {
     data.timeInForce =
@@ -152,6 +195,7 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
         str_to_type(POSITION_SIDE_STR, val->get_ref<const std::string &>());
   }
 
+  // --- FLAGS ---
   if (auto val = orderJson.get_value(std::string(REDUCE_ONLY));
       val && val->is_boolean()) {
     data.reduceOnly = val->get<bool>();
@@ -167,6 +211,7 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
     data.priceProtect = val->get<bool>();
   }
 
+  // --- EXTRA ---
   if (auto val = orderJson.get_value(std::string(WORKING_TYPE));
       val && val->is_string()) {
     data.workingType =
@@ -189,14 +234,14 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
     data.goodTillDate = val->get<uint64_t>();
   }
 
-  if (auto val = jsonData.get_value(std::string(UPDATE_TIME));
+  // --- ORDER TRADE TIME ---
+  if (auto val = orderJson.get_value(std::string(TRADE_TIME));
       val && val->is_number_unsigned()) {
-    data.updateTime = val->get<uint64_t>();
+    data.tradeTime = val->get<uint64_t>();
   }
 
   return data;
 }
-
 /* static */ ParsedUserData TradeLiteParser::parse(const StreamMessage &msg) {
   JSONQuery jsonData = msg.data;
   TradeLiteEvent data;
