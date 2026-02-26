@@ -2,6 +2,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <optional>
 #include <sstream>
 #include <streambuf>
@@ -9,6 +10,8 @@
 #include <thread>
 #include <variant>
 
+#include "core/account_manager/account_controller.hpp"
+#include "core/account_manager/order_book.hpp"
 #include "core/controllers/market_data_controller.hpp"
 #include "core/controllers/trading_stream_controller.hpp"
 #include "core/controllers/user_data_stream_controller.hpp"
@@ -245,6 +248,13 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<UserData::UserDataStreamController> userdata_controller =
       std::make_unique<UserData::UserDataStreamController>();
 
+  std::unique_ptr<OrderBook> order_book = std::make_unique<OrderBook>();
+  std::unique_ptr<AccountController> account_controller =
+      std::make_unique<AccountController>();
+
+  userdata_controller->subscribe_to_publisher(order_book.get());
+  userdata_controller->subscribe_to_publisher(account_controller.get());
+
   /*
   // Fixed num test
   Fixed num(123.1232434, 2);
@@ -268,9 +278,24 @@ int main(int argc, char *argv[]) {
 
   std::this_thread::sleep_for(std::chrono::seconds(3));
 
-  req.setReduceOnly(true);
-  req.setOrderSide(ORDER_SIDE::SELL);
-  trading_controller->create_order(req);
+  Trading::TradeRequest req2(ORDER_SIDE::SELL, POSITION_SIDE::BOTH,
+                             ORDER_TYPE::MARKET, "SOLUSDT",
+                             Fixed::str_to_fixed("0.10"));
+
+  req2.setReduceOnly(true);
+  trading_controller->create_order(req2);
+
+  std::optional<OrderEntry> order =
+      order_book->getOrderByClientId(req.getClientOrderId());
+
+  for (auto &asset : account_controller->getBalancesList()) {
+    Log::log("Asset: " + asset);
+  }
+
+  for (auto &pos : account_controller->getPositionsList()) {
+    Log::log("Position: " + pos);
+  }
+
   /*
   std::optional<JSONQuery> balance_info =
       TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD::ACCOUNT_BALANCE)

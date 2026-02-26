@@ -42,16 +42,32 @@ struct OrderTradeUpdateEvent {
   std::string symbol{};        // s
   std::string clientOrderId{}; // c
 
-  ORDER_STATUS status{}; // X
+  EXECUTION_TYPE executionType{}; // x
+  ORDER_STATUS status{};          // X
 
   Fixed price{};     // p
   Fixed avgPrice{};  // ap
   Fixed stopPrice{}; // sp
+  Fixed lastPrice{}; // L
 
   Fixed origQty{};         // q
-  Fixed executedQty{};     // z (cum)
+  Fixed executedQty{};     // z
   Fixed lastExecutedQty{}; // l
   Fixed cumQuote{};        // Z
+
+  // fees
+  Fixed commission{};            // n
+  std::string commissionAsset{}; // N
+
+  // pnl
+  Fixed realizedPnL{}; // rp
+
+  // misc trade
+  uint64_t tradeId = 0; // t
+  bool isMaker = false; // m
+
+  Fixed bidNotional{}; // b
+  Fixed askNotional{}; // a
 
   TIME_IN_FORCE timeInForce{}; // f
   ORDER_TYPE orderType{};      // o
@@ -70,7 +86,10 @@ struct OrderTradeUpdateEvent {
 
   uint64_t goodTillDate = 0; // gtd
 
-  uint64_t updateTime = 0; // T (top level)
+  // time
+  uint64_t eventTime = 0;       // E
+  uint64_t transactionTime = 0; // T (top)
+  uint64_t tradeTime = 0;       // T (inside order)
 };
 
 struct AccountUpdateEvent {
@@ -155,20 +174,39 @@ private:
   static constexpr std::string_view EVENT_TYPE = "e";
   static constexpr std::string_view ORDER = "o";
 
+  // --- IDS / BASIC ---
   static constexpr std::string_view ORDER_ID = "i";
   static constexpr std::string_view SYMBOL = "s";
   static constexpr std::string_view CLIENT_ORDER_ID = "c";
+  static constexpr std::string_view EXECUTION_TYPE = "x";
   static constexpr std::string_view STATUS = "X";
 
+  // --- PRICE ---
   static constexpr std::string_view PRICE = "p";
   static constexpr std::string_view AVG_PRICE = "ap";
   static constexpr std::string_view STOP_PRICE = "sp";
+  static constexpr std::string_view LAST_PRICE = "L";
 
+  // --- QTY ---
   static constexpr std::string_view ORIG_QTY = "q";
-  static constexpr std::string_view CUM_QTY = "Z";
   static constexpr std::string_view EXECUTED_QTY = "z";
   static constexpr std::string_view LAST_EXECUTED_QTY = "l";
+  static constexpr std::string_view CUM_QTY = "Z";
 
+  // --- FEES ---
+  static constexpr std::string_view COMMISSION = "n";
+  static constexpr std::string_view COMMISSION_ASSET = "N";
+
+  // --- PNL ---
+  static constexpr std::string_view REALIZED_PNL = "rp";
+
+  // --- TRADE INFO ---
+  static constexpr std::string_view TRADE_ID = "t";
+  static constexpr std::string_view IS_MAKER = "m";
+  static constexpr std::string_view BID_NOTIONAL = "b";
+  static constexpr std::string_view ASK_NOTIONAL = "a";
+
+  // --- TYPES ---
   static constexpr std::string_view TIME_IN_FORCE = "f";
   static constexpr std::string_view TYPE = "o";
   static constexpr std::string_view ORIG_TYPE = "ot";
@@ -176,16 +214,22 @@ private:
   static constexpr std::string_view SIDE = "S";
   static constexpr std::string_view POSITION_SIDE = "ps";
 
+  // --- FLAGS ---
   static constexpr std::string_view REDUCE_ONLY = "R";
   static constexpr std::string_view CLOSE_POSITION = "cp";
   static constexpr std::string_view PRICE_PROTECT = "pP";
 
+  // --- EXTRA ---
   static constexpr std::string_view WORKING_TYPE = "wt";
   static constexpr std::string_view PRICE_MATCH = "pm";
   static constexpr std::string_view STP_MODE = "V";
 
   static constexpr std::string_view GOOD_TILL_DATE = "gtd";
-  static constexpr std::string_view UPDATE_TIME = "T";
+
+  // --- TIME ---
+  static constexpr std::string_view EVENT_TIME = "E";
+  static constexpr std::string_view TRANSACTION_TIME = "T"; // top-level
+  static constexpr std::string_view TRADE_TIME = "T";       // inside order
 };
 
 class TradeLiteParser {

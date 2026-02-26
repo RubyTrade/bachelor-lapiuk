@@ -9,9 +9,48 @@
 #include "core/utils/time.hpp"
 
 #include <memory>
+#include <pstl/glue_algorithm_defs.h>
 #include <string>
+#include <vector>
 
 namespace UserData {
+
+class IUserEventListener {
+public:
+  virtual ~IUserEventListener() = default;
+  virtual void onEvent(const ParsedUserData &event) = 0;
+};
+
+class UserEventPublisher {
+public:
+  void subscribe(IUserEventListener *listener) {
+    if (!listener)
+      return;
+
+    if (std::find(m_listeners.begin(), m_listeners.end(), listener) ==
+        m_listeners.end()) {
+      m_listeners.push_back(listener);
+    }
+  }
+
+  void unsubscribe(IUserEventListener *listener) {
+    m_listeners.erase(
+        std::remove(m_listeners.begin(), m_listeners.end(), listener),
+        m_listeners.end());
+  }
+
+  void publish(const ParsedUserData &event) {
+    auto listenersCopy = m_listeners;
+
+    for (auto *listener : listenersCopy) {
+      if (listener)
+        listener->onEvent(event);
+    }
+  }
+
+private:
+  std::vector<IUserEventListener *> m_listeners;
+};
 
 struct MessageStreams {
   // Main string message queue
@@ -24,6 +63,9 @@ struct MessageStreams {
 class UserDataStreamController {
 public:
   UserDataStreamController();
+
+  void subscribe_to_publisher(IUserEventListener *listener);
+  void unsubscribe_from_publisher(IUserEventListener *listener);
 
 private:
   void _start_listen_thread();
@@ -50,6 +92,8 @@ private:
   // Main string message queue
   std::unique_ptr<MessageStreams> m_userDataMsgQueues;
   std::unique_ptr<Queue<ParsedUserData>> m_parsedStreamData;
+
+  std::unique_ptr<UserEventPublisher> m_eventPublisher;
 
 private:
   static constexpr std::chrono::minutes LISTEN_KEY_EXPIRY_TIME{30};

@@ -13,6 +13,8 @@
 
 using namespace Trading;
 
+int TradeRequest::s_unique_id_counter = 0;
+
 TradingStreamController::TradingStreamController()
     : m_queryBuilder(std::make_unique<TradingStreamQueryBuilder>(
           TRADE_STREAM_METHOD::INVALID_METHOD)),
