@@ -71,7 +71,7 @@ class OrderBook : public UserData::IUserEventListener {
 public:
   OrderBook();
 
-  void onEvent(const UserData::ParsedUserData &event) override;
+  void enqueue(UserData::ParsedUserData event) override;
 
   std::optional<OrderEntry>
   getOrderByClientId(const std::string &clientOrderId);
@@ -79,6 +79,9 @@ public:
   uint64_t getLastUpdateTime() const { return m_lastUpdateTime; }
 
 private:
+  void _runProcessingThread();
+  void _listenToUpdates();
+
   void updateOrCreateOrder(const UserData::ParsedUserData &event);
 
   void _updateLastUpdateTime();
@@ -89,6 +92,10 @@ private:
 
 private:
   std::unique_ptr<AccountOrders> m_orders;
+
+  std::unique_ptr<Queue<UserData::ParsedUserData>> m_eventQueue;
+
+  std::unique_ptr<Thread> m_processingThread;
 
   uint64_t m_lastUpdateTime;
 };

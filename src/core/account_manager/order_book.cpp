@@ -4,12 +4,17 @@
 #include "core/utils/constants.hpp"
 
 #include <chrono>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <variant>
 
-OrderBook::OrderBook() : m_orders(std::make_unique<AccountOrders>()) {
+OrderBook::OrderBook()
+    : m_orders(std::make_unique<AccountOrders>()),
+      m_eventQueue(std::make_unique<Queue<UserData::ParsedUserData>>()),
+      m_processingThread(std::make_unique<Thread>()) {
   _updateLastUpdateTime();
+  _runProcessingThread();
 }
 
 std::optional<OrderEntry>
@@ -35,11 +40,25 @@ void AccountOrders::tryEmplace(const std::string &clientOrderId,
   fn(it->second);
 }
 
-void OrderBook::onEvent(const UserData::ParsedUserData &event) {
+void OrderBook::enqueue(UserData::ParsedUserData event) {
   if (!std::holds_alternative<ErrorParse>(event))
-    updateOrCreateOrder(event);
+    m_eventQueue->push_message(std::move(event));
 
   return;
+}
+
+void OrderBook::_runProcessingThread() {
+  m_processingThread->start(&OrderBook::_listenToUpdates, this);
+}
+
+void OrderBook::_listenToUpdates() {
+  while (true) {
+    UserData::ParsedUserData out_msg;
+    bool res = m_eventQueue->pop_message(out_msg);
+    if (res) {
+      updateOrCreateOrder(std::move(out_msg));
+    }
+  }
 }
 
 std::optional<OrderEntry>
