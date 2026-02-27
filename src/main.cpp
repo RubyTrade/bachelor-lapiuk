@@ -288,6 +288,8 @@ int main(int argc, char *argv[]) {
   std::optional<OrderEntry> order =
       order_book->getOrderByClientId(req.getClientOrderId());
 
+  std::this_thread::sleep_for(std::chrono::seconds(2));
+
   for (auto &asset : account_controller->getBalancesList()) {
     Log::log("Asset: " + asset);
   }
@@ -295,6 +297,11 @@ int main(int argc, char *argv[]) {
   for (auto &pos : account_controller->getPositionsList()) {
     Log::log("Position: " + pos);
   }
+
+  std::optional<OrderEntry> order2 =
+      order_book->getOrderByClientId(req2.getClientOrderId());
+
+  Log::log("order2: " + order2->symbol);
 
   /*
   std::optional<JSONQuery> balance_info =

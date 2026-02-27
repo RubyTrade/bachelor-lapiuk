@@ -6,6 +6,7 @@
 #include "core/utils/constants.hpp"
 #include "core/utils/fixed_num.hpp"
 #include "core/utils/helper_utils.hpp"
+#include "core/utils/queue.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -104,9 +105,12 @@ public:
   const std::set<std::string> &getBalancesList() const;
   const std::set<std::string> &getPositionsList() const;
 
-  void onEvent(const UserData::ParsedUserData &event) override;
+  void enqueue(UserData::ParsedUserData event) override;
 
 private:
+  void _runProcessingThread();
+  void _listenToUpdates();
+
   void updateOrCreateAccountInfo(const UserData::ParsedUserData &event);
 
   void updateBalance(const UserData::AccountUpdateEvent &event);
@@ -120,6 +124,10 @@ private:
   std::unique_ptr<AccountConfig> m_config;
   std::unique_ptr<AccountBalance> m_balance;
   std::unique_ptr<AccountPositions> m_positions;
+
+  std::unique_ptr<Queue<UserData::ParsedUserData>> m_eventQueue;
+
+  std::unique_ptr<Thread> m_processingThread;
 
   uint64_t m_lastUpdateTime;
 };

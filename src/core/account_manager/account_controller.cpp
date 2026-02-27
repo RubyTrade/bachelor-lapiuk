@@ -1,5 +1,6 @@
 #include "core/account_manager/account_controller.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
+#include "core/utils/log.hpp"
 #include <memory>
 #include <mutex>
 #include <variant>
@@ -98,15 +99,32 @@ bool AccountConfig::getMultiAssetMode() const {
 AccountController::AccountController()
     : m_balance(std::make_unique<AccountBalance>()),
       m_positions(std::make_unique<AccountPositions>()),
-      m_config(std::make_unique<AccountConfig>()) {
+      m_config(std::make_unique<AccountConfig>()),
+      m_eventQueue(std::make_unique<Queue<UserData::ParsedUserData>>()),
+      m_processingThread(std::make_unique<Thread>()) {
   _updateLastUpdateTime();
+  _runProcessingThread();
 }
 
-void AccountController::onEvent(const UserData::ParsedUserData &event) {
+void AccountController::enqueue(UserData::ParsedUserData event) {
   if (!std::holds_alternative<ErrorParse>(event))
-    updateOrCreateAccountInfo(event);
+    m_eventQueue->push_message(std::move(event));
 
   return;
+}
+
+void AccountController::_runProcessingThread() {
+  m_processingThread->start(&AccountController::_listenToUpdates, this);
+}
+
+void AccountController::_listenToUpdates() {
+  while (true) {
+    UserData::ParsedUserData out_msg;
+    bool res = m_eventQueue->pop_message(out_msg);
+    if (res) {
+      updateOrCreateAccountInfo(std::move(out_msg));
+    }
+  }
 }
 
 void AccountController::updateOrCreateAccountInfo(

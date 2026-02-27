@@ -18,7 +18,7 @@ namespace UserData {
 class IUserEventListener {
 public:
   virtual ~IUserEventListener() = default;
-  virtual void onEvent(const ParsedUserData &event) = 0;
+  virtual void enqueue(ParsedUserData event) = 0;
 };
 
 class UserEventPublisher {
@@ -44,7 +44,7 @@ public:
 
     for (auto *listener : listenersCopy) {
       if (listener)
-        listener->onEvent(event);
+        listener->enqueue(event);
     }
   }
 
