@@ -70,8 +70,11 @@ private:
 class OrderBook : public UserData::IUserEventListener {
 public:
   OrderBook();
+  ~OrderBook();
 
   void enqueue(UserData::ParsedUserData event) override;
+  void stop() override;
+  void start() override;
 
   std::optional<OrderEntry>
   getOrderByClientId(const std::string &clientOrderId);
@@ -94,6 +97,7 @@ private:
   std::unique_ptr<AccountOrders> m_orders;
 
   std::unique_ptr<Queue<UserData::ParsedUserData>> m_eventQueue;
+  std::atomic_bool m_isQueueActive{false};
 
   std::unique_ptr<Thread> m_processingThread;
 

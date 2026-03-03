@@ -37,10 +37,14 @@ public:
   }
 
   std::string getenv(const std::string &key) {
-    if (!key.empty())
-      return ::getenv(key.c_str());
+    if (key.empty())
+      return "";
 
-    return "";
+    const char *val = ::getenv(key.c_str());
+    if (!val)
+      return "";
+
+    return std::string(val);
   }
 
   void setenv(const std::string &key, const std::string &value) {

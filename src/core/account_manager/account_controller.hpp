@@ -99,6 +99,7 @@ private:
 class AccountController : public UserData::IUserEventListener {
 public:
   AccountController();
+  ~AccountController();
 
   uint64_t getLastUpdateTime() const { return m_lastUpdateTime; }
 
@@ -106,6 +107,8 @@ public:
   const std::set<std::string> &getPositionsList() const;
 
   void enqueue(UserData::ParsedUserData event) override;
+  void start() override;
+  void stop() override;
 
 private:
   void _runProcessingThread();
@@ -126,6 +129,7 @@ private:
   std::unique_ptr<AccountPositions> m_positions;
 
   std::unique_ptr<Queue<UserData::ParsedUserData>> m_eventQueue;
+  std::atomic_bool m_isQueueActive{false};
 
   std::unique_ptr<Thread> m_processingThread;
 

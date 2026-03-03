@@ -8,8 +8,10 @@ class Fixed {
 public:
   inline static constexpr int MAX_SCALE = 10;
 
-  Fixed(int64_t val = 0, int scale = 0);
-  Fixed(const std::string &str, int scale = 0);
+  Fixed();
+  Fixed(int64_t val, int scale = 0);
+  Fixed(const std::string &str);
+  Fixed(const std::string &str, int scale);
   Fixed(double val, int scale = 0);
   Fixed(int val, int scale = 0);
 

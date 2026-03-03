@@ -389,7 +389,7 @@ ParametersBuilder::add_clientOrderId(const std::string &clientOrderId) {
 }
 
 ParametersBuilder &ParametersBuilder::add_reduceOnly(bool reduceOnly) {
-  _add_to_params("newClientOrderId", reduceOnly ? "true" : "false");
+  _add_to_params("reduceOnly", reduceOnly ? "true" : "false");
 
   return *this;
 }

@@ -19,6 +19,8 @@ class IUserEventListener {
 public:
   virtual ~IUserEventListener() = default;
   virtual void enqueue(ParsedUserData event) = 0;
+  virtual void start() = 0;
+  virtual void stop() = 0;
 };
 
 class UserEventPublisher {
@@ -30,6 +32,7 @@ public:
     if (std::find(m_listeners.begin(), m_listeners.end(), listener) ==
         m_listeners.end()) {
       m_listeners.push_back(listener);
+      listener->start();
     }
   }
 
@@ -37,6 +40,7 @@ public:
     m_listeners.erase(
         std::remove(m_listeners.begin(), m_listeners.end(), listener),
         m_listeners.end());
+    listener->stop();
   }
 
   void publish(const ParsedUserData &event) {

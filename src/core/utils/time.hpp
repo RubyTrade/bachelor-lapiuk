@@ -32,8 +32,8 @@ public:
   }
 
   ~AsyncTimer() {
-    _stop_io_context();
     stop();
+    _stop_io_context();
   }
 
   // Callback timer will detach the timer Thread
@@ -61,13 +61,13 @@ public:
     auto cb =
         std::bind(std::forward<Func>(callback), std::forward<Args>(args)...);
 
-    m_timer.async_wait([this, &duration, cb = std::move(cb)](
-                           const boost::system::error_code &ec) {
-      if (!ec) {
-        cb();
-        m_is_running = false;
-      }
-    });
+    m_timer.async_wait(
+        [this, cb = std::move(cb)](const boost::system::error_code &ec) {
+          if (!ec) {
+            cb();
+            m_is_running = false;
+          }
+        });
   }
 
   // Callback timer will detach the timer Thread
@@ -94,14 +94,16 @@ public:
 
     m_timer.expires_after(duration);
 
+    const Duration durationCopy = duration;
+
     auto cb =
         std::bind(std::forward<Func>(callback), std::forward<Args>(args)...);
 
-    m_timer.async_wait([this, &duration, cb = std::move(cb)](
+    m_timer.async_wait([this, durationCopy, cb = std::move(cb)](
                            const boost::system::error_code &ec) {
       if (!ec) {
         cb();
-        _schedule_recurring(duration, cb);
+        _schedule_recurring(durationCopy, cb);
       }
     });
   }
@@ -140,7 +142,13 @@ public:
   }
 
   void stop() {
-    m_timer.cancel();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_is_running)
+      return;
+    try {
+      m_timer.cancel();
+    } catch (...) {
+    }
     m_is_running = false;
   }
 
@@ -160,11 +168,11 @@ public:
 
 private:
   template <class Duration, class Callback>
-  void _schedule_recurring(const Duration &duration, Callback &&cb) {
+  void _schedule_recurring(Duration duration, Callback cb) {
     m_timer.expires_after(duration);
 
-    m_timer.async_wait([this, &duration, cb = std::move(cb)](
-                           const boost::system::error_code &ec) {
+    m_timer.async_wait([this, duration, cb = std::move(cb)](
+                           const boost::system::error_code &ec) mutable {
       if (!ec) {
         cb();
         _schedule_recurring(duration, cb);
@@ -175,17 +183,16 @@ private:
   void _run_io_context() {
     m_work_guard.emplace(m_io_context.get_executor());
 
-    m_io_context_thread
-        .start([this]() {
-          // allow async methods to run
-          m_io_context.run();
-        })
-        .detach();
+    m_io_context_thread.start([this]() {
+      // allow async methods to run
+      m_io_context.run();
+    });
   }
 
   void _stop_io_context() {
     m_work_guard.reset();
     m_io_context.stop();
+    m_io_context_thread.stop();
   }
 
 private:

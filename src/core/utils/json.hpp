@@ -18,10 +18,10 @@ class JSONQuery {
 public:
   JSONQuery() = default;
 
-  JSONQuery(const std::string &json)
-      : m_jsonQuery(nlohmann::json::parse(json)) {}
-  JSONQuery(const nlohmann::json &json) : m_jsonQuery(json) {}
-  JSONQuery(const JSONQuery &json) : m_jsonQuery(json.json()) {}
+  JSONQuery(const char *json);
+  JSONQuery(const std::string &json);
+  JSONQuery(const nlohmann::json &json);
+  JSONQuery(const JSONQuery &json);
 
   std::string str() const { return m_jsonQuery.dump(); }
   nlohmann::json json() const { return m_jsonQuery; }

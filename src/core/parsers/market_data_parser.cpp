@@ -248,6 +248,22 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
   return data;
 }
 
+/* static */ bool DepthDataParser::parsePriceQty(const nlohmann::json &entry,
+                                                 Fixed &price, Fixed &qty) {
+  if (!entry.is_array() || entry.size() != 2) {
+    return false;
+  }
+
+  if (!entry[0].is_string() || !entry[1].is_string()) {
+    return false;
+  }
+
+  price = Fixed::str_to_fixed(entry[0].get<std::string>());
+  qty = Fixed::str_to_fixed(entry[1].get<std::string>());
+
+  return true;
+}
+
 /* static */ ParsedMarketData DepthDataParser::parse(const StreamMessage &msg) {
   JSONQuery jsonData = msg.data;
   DepthData data;
@@ -297,11 +313,11 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
   if (auto val = jsonData.get_value(std::string(BIDS));
       val && val->is_array()) {
     for (const auto &entry : val->get<nlohmann::json>()) {
-      if (entry.is_array() && entry.size() == 2) {
-        const std::string &priceStr = entry[0].get_ref<const std::string &>();
-        const std::string &qtyStr = entry[1].get_ref<const std::string &>();
-        data.bids.emplace_back(Fixed::str_to_fixed(priceStr),
-                               Fixed::str_to_fixed(qtyStr));
+      Fixed price, qty;
+      if (parsePriceQty(entry, price, qty)) {
+        data.bids.emplace_back(price, qty);
+      } else {
+        return ErrorParse{"array of bids is not parsed"};
       }
     }
   } else {
@@ -311,11 +327,11 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
   if (auto val = jsonData.get_value(std::string(ASKS));
       val && val->is_array()) {
     for (const auto &entry : val->get<nlohmann::json>()) {
-      if (entry.is_array() && entry.size() == 2) {
-        const std::string &priceStr = entry[0].get_ref<const std::string &>();
-        const std::string &qtyStr = entry[1].get_ref<const std::string &>();
-        data.asks.emplace_back(Fixed::str_to_fixed(priceStr),
-                               Fixed::str_to_fixed(qtyStr));
+      Fixed price, qty;
+      if (parsePriceQty(entry, price, qty)) {
+        data.asks.emplace_back(price, qty);
+      } else {
+        return ErrorParse{"array of asks is not parsed"};
       }
     }
   } else {

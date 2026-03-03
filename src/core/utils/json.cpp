@@ -3,6 +3,37 @@
 #include <optional>
 #include <string>
 
+JSONQuery::JSONQuery(const char *json) {
+  std::string jsonStr = json;
+  if (jsonStr.empty()) {
+    m_jsonQuery = nlohmann::json{};
+    return;
+  }
+
+  if (nlohmann::json::accept(jsonStr)) {
+    m_jsonQuery = nlohmann::json::parse(jsonStr);
+  } else {
+    m_jsonQuery = nlohmann::json{};
+  }
+}
+
+JSONQuery::JSONQuery(const std::string &json) {
+  if (json.empty()) {
+    m_jsonQuery = nlohmann::json{};
+    return;
+  }
+
+  if (nlohmann::json::accept(json)) {
+    m_jsonQuery = nlohmann::json::parse(json);
+  } else {
+    m_jsonQuery = nlohmann::json{};
+  }
+}
+
+JSONQuery::JSONQuery(const nlohmann::json &json) : m_jsonQuery(json) {}
+
+JSONQuery::JSONQuery(const JSONQuery &json) : m_jsonQuery(json.json()) {}
+
 void JSONQuery::set_value(const std::string &key, const JSONValue &value) {
   std::visit(
       [&](auto &&val) {
@@ -78,6 +109,9 @@ JSONQuery::get_value(const nlohmann::json &json, const std::string &key) {
   return json.contains(key);
 }
 
-void JSONQuery::remove_key(const std::string &key) { m_jsonQuery.erase(key); }
+void JSONQuery::remove_key(const std::string &key) {
+  if (is_key_exists(key))
+    m_jsonQuery.erase(key);
+}
 
 bool JSONQuery::is_empty() const { return m_jsonQuery.empty(); }
