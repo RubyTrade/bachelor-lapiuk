@@ -5,6 +5,7 @@
 #include "core/parsers/common_parser_utils.hpp"
 #include "core/utils/constants.hpp"
 #include "core/utils/fixed_num.hpp"
+#include "core/utils/json.hpp"
 
 #include <cstdint>
 #include <string>
@@ -133,6 +134,10 @@ private:
 class DepthDataParser {
 public:
   static ParsedMarketData parse(const StreamMessage &msg);
+
+private:
+  static bool parsePriceQty(const nlohmann::json &entry, Fixed &price,
+                            Fixed &qty);
 
 private:
   static constexpr std::string_view EVENT_TIME = "E";

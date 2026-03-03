@@ -26,7 +26,7 @@ enum class MARKET_STREAM_METHOD {
 
 class MarketStreamQueryBuilder {
 public:
-  enum class DEPTH_LEVELS { SMALL = 5, MID = 10, LARGE = 20 };
+  enum class DEPTH_LEVELS { SMALL = 5, MEDIUM = 10, LARGE = 20 };
 
 public:
   explicit MarketStreamQueryBuilder(MARKET_STREAM_METHOD method);

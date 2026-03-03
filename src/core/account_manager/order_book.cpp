@@ -14,8 +14,9 @@ OrderBook::OrderBook()
       m_eventQueue(std::make_unique<Queue<UserData::ParsedUserData>>()),
       m_processingThread(std::make_unique<Thread>()) {
   _updateLastUpdateTime();
-  _runProcessingThread();
 }
+
+OrderBook::~OrderBook() { stop(); }
 
 std::optional<OrderEntry>
 AccountOrders::getOrderByClientId(const std::string &clientOrderId) {
@@ -47,17 +48,24 @@ void OrderBook::enqueue(UserData::ParsedUserData event) {
   return;
 }
 
-void OrderBook::_runProcessingThread() {
+void OrderBook::start() {
+  m_isQueueActive = true;
   m_processingThread->start(&OrderBook::_listenToUpdates, this);
 }
 
+void OrderBook::stop() {
+  m_isQueueActive = false;
+  m_eventQueue->stop_queue();
+  m_processingThread->stop();
+}
+
 void OrderBook::_listenToUpdates() {
-  while (true) {
+  while (m_isQueueActive) {
     UserData::ParsedUserData out_msg;
-    bool res = m_eventQueue->pop_message(out_msg);
-    if (res) {
-      updateOrCreateOrder(std::move(out_msg));
-    }
+    if (!m_eventQueue->pop_message(out_msg))
+      break;
+
+    updateOrCreateOrder(std::move(out_msg));
   }
 }
 

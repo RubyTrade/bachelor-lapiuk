@@ -1,5 +1,6 @@
 #include "core/account_manager/account_controller.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
+#include "core/utils/constants.hpp"
 #include "core/utils/log.hpp"
 #include <memory>
 #include <mutex>
@@ -103,8 +104,9 @@ AccountController::AccountController()
       m_eventQueue(std::make_unique<Queue<UserData::ParsedUserData>>()),
       m_processingThread(std::make_unique<Thread>()) {
   _updateLastUpdateTime();
-  _runProcessingThread();
 }
+
+AccountController::~AccountController() { stop(); }
 
 void AccountController::enqueue(UserData::ParsedUserData event) {
   if (!std::holds_alternative<ErrorParse>(event))
@@ -113,17 +115,25 @@ void AccountController::enqueue(UserData::ParsedUserData event) {
   return;
 }
 
-void AccountController::_runProcessingThread() {
+void AccountController::start() {
+  m_isQueueActive = true;
   m_processingThread->start(&AccountController::_listenToUpdates, this);
 }
 
+void AccountController::stop() {
+  m_isQueueActive = false;
+  m_eventQueue->stop_queue();
+  m_processingThread->stop();
+}
+
 void AccountController::_listenToUpdates() {
-  while (true) {
+  while (m_isQueueActive) {
     UserData::ParsedUserData out_msg;
-    bool res = m_eventQueue->pop_message(out_msg);
-    if (res) {
-      updateOrCreateAccountInfo(std::move(out_msg));
+    if (!m_eventQueue->pop_message(out_msg)) {
+      break;
     }
+
+    updateOrCreateAccountInfo(std::move(out_msg));
   }
 }
 

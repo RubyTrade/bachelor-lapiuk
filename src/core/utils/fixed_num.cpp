@@ -13,8 +13,16 @@
   return Fixed(str, scale);
 }
 
+Fixed::Fixed() : m_value(0), m_scale(0) {}
+
 Fixed::Fixed(int64_t val, int scale) : m_value(val) {
   m_scale = _constraint_scale(scale);
+}
+
+Fixed::Fixed(const std::string &str) {
+  Fixed fixed = str_to_fixed(str);
+  m_scale = fixed.scale();
+  m_value = fixed.value();
 }
 
 Fixed::Fixed(const std::string &str, int scale) {
@@ -51,13 +59,17 @@ int64_t Fixed::_value_from_double(double val, int scale) {
 }
 
 std::string Fixed::to_string() const {
-  int64_t base = static_cast<int64_t>(std::pow(10, m_scale));
-  int64_t main = m_value / base;
-  int64_t frac = std::llabs(m_value % base);
+  const int64_t base = static_cast<int64_t>(std::pow(10, m_scale));
+  const bool isNegative = (m_value < 0);
+  const int64_t absValue = std::llabs(m_value);
 
-  int zeroing = (m_scale - std::to_string(frac).length());
+  const int64_t main = absValue / base;
+  const int64_t frac = absValue % base;
 
-  return std::to_string(main) + "." +
+  const int zeroing = (m_scale - std::to_string(frac).length());
+  const std::string sign = isNegative ? "-" : "";
+
+  return sign + std::to_string(main) + "." +
          std::string(zeroing > 0 ? zeroing : 0, '0') + std::to_string(frac);
 }
 
@@ -185,9 +197,6 @@ bool Fixed::operator>=(const Fixed &other) const {
 }
 
 Fixed Fixed::_oper_add(const Fixed &other) const {
-  if (m_scale == other.m_scale)
-    return Fixed(m_value + other.m_value, m_scale);
-
   const Fixed &bigger_scale = (m_scale >= other.m_scale) ? *this : other;
 
   const Fixed &smaller_scale = (m_scale < other.m_scale) ? *this : other;
@@ -205,9 +214,6 @@ Fixed Fixed::_oper_add(const Fixed &other) const {
 }
 
 Fixed Fixed::_oper_sub(const Fixed &other) const {
-  if (m_scale == other.m_scale)
-    return Fixed(m_value - other.m_value, m_scale);
-
   bool needToSwitch = (m_scale < other.m_scale);
 
   const Fixed &bigger_scale = (!needToSwitch) ? *this : other;
@@ -235,41 +241,36 @@ Fixed Fixed::_oper_sub(const Fixed &other) const {
 }
 
 Fixed Fixed::_oper_mul(const Fixed &other) const {
-  if (m_scale == other.m_scale)
-    return Fixed(m_value * other.m_value, m_scale);
+  const int resultScale = std::max(m_scale, other.m_scale);
+  const int divisorPow = (m_scale + other.m_scale) - resultScale;
 
-  const Fixed &bigger_scale = (m_scale >= other.m_scale) ? *this : other;
+  __int128 product = (__int128)m_value * other.m_value;
 
-  const Fixed &smaller_scale = (m_scale < other.m_scale) ? *this : other;
+  // Scale correction: divide by 10^(m_scale + other_scale - resultScale)
+  for (int i = 0; i < divisorPow; ++i) {
+    product /= 10;
+  }
 
-  Fixed normalized = _normalize_scale(smaller_scale, bigger_scale.m_scale);
-
-  __int128 result = (__int128)bigger_scale.m_value * normalized.m_value;
-
-  if (result > std::numeric_limits<int64_t>::max() ||
-      result < std::numeric_limits<int64_t>::min()) {
+  if (product > std::numeric_limits<int64_t>::max() ||
+      product < std::numeric_limits<int64_t>::min()) {
     return Fixed{};
   }
 
-  return Fixed((int64_t)result, bigger_scale.m_scale);
+  return Fixed((int64_t)product, resultScale);
 }
 
 Fixed Fixed::_oper_div(const Fixed &other) const {
   if (m_value == 0 || other.m_value == 0)
     return Fixed{};
 
-  const Fixed &bigger_scale = (m_scale >= other.m_scale) ? *this : other;
-
-  const Fixed &smaller_scale = (m_scale < other.m_scale) ? *this : other;
-
-  int resultScale = bigger_scale.m_scale;
+  const int resultScale = std::max(m_scale, other.m_scale);
 
   __int128 numerator = (__int128)m_value;
+  const int scaleAdjust = other.m_scale + resultScale - m_scale;
 
-  int scaleAdjust = resultScale + other.m_scale - m_scale;
-
-  for (int i = 0; i < scaleAdjust; ++i)
+  for (int i = 0; i < scaleAdjust; ++i) {
     numerator *= 10;
+  }
 
   __int128 result = numerator / other.m_value;
 
@@ -278,7 +279,7 @@ Fixed Fixed::_oper_div(const Fixed &other) const {
     return Fixed{};
   }
 
-  return Fixed((int64_t)result, bigger_scale.m_scale);
+  return Fixed((int64_t)result, resultScale);
 }
 
 Fixed Fixed::_normalize_scale(const Fixed &other, int scale) const {
