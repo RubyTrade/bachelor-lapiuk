@@ -1,6 +1,7 @@
 #include "trading_stream_controller.hpp"
 #include "core/controllers/trading_stream_utils.hpp"
 #include "core/net/net.hpp"
+#include "core/parsers/trading_stream_parser.hpp"
 #include "core/stream/trading_stream.hpp"
 #include "core/utils/constants.hpp"
 #include "core/utils/fixed_num.hpp"
@@ -20,9 +21,11 @@ TradingStreamController::TradingStreamController()
           TRADE_STREAM_METHOD::INVALID_METHOD)),
       m_paramBuilder(std::make_unique<ParametersBuilder>()),
       m_listenThread(std::make_unique<Thread>()),
-      m_readThread(std::make_unique<Thread>()) {
+      m_readThread(std::make_unique<Thread>()),
+      m_tradingMsgQueues(std::make_unique<MessageStreams>()),
+      m_parsedTradingData(std::make_unique<Queue<ParsedTradingStream>>()) {
   // Trade Stream init
-  m_tradeStream = std::make_unique<TradingStream>(m_msgQueue);
+  m_tradeStream = std::make_unique<TradingStream>(m_tradingMsgQueues->msgQueue);
 
   NetError wsErr = m_tradeStream->connect_to_websocket();
   if (!wsErr.hasError()) {
@@ -30,11 +33,34 @@ TradingStreamController::TradingStreamController()
     _start_read_thread();
   }
 
-  m_resultsQueue.register_callback(
-      [this](const ResultMessage &msg) { _fulfill_pending_result(msg); });
+  m_tradingMsgQueues->resultsQueue.register_callback(
+      [this](const ResultMessage &msg) {
+        TRADE_STREAM_METHOD method = _get_pending_method(msg.id);
+        if (method != TRADE_STREAM_METHOD::INVALID_METHOD) {
+          m_parsedTradingData->push_message(
+              TradingStreamParser::parse({method, msg}));
+        }
+      });
 
   _do_session_logon();
 };
+
+TRADE_STREAM_METHOD
+TradingStreamController::_get_pending_method(const std::string &id) {
+  std::lock_guard<std::mutex> lock(m_pendingReqMtx);
+
+  TRADE_STREAM_METHOD method = TRADE_STREAM_METHOD::INVALID_METHOD;
+
+  auto it = m_pendingRequests.find(id);
+  if (it == m_pendingRequests.end())
+    return method;
+
+  method = it->second;
+
+  m_pendingRequests.erase(it);
+
+  return method;
+}
 
 NetError TradingStreamController::_do_session_logon() {
   NetError netErr;
@@ -58,28 +84,13 @@ void TradingStreamController::_start_read_thread() {
 void TradingStreamController::_start_buffer_reading() {
   while (true) {
     std::string out_msg;
-    bool res = m_msgQueue.pop_message(out_msg);
+    bool res = m_tradingMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {
       Log::log("TRADINGDATA: " + out_msg);
 
       _parse_msg(std::move(out_msg));
     }
   }
-}
-
-void TradingStreamController::_fulfill_pending_result(
-    const ResultMessage &msg) {
-  std::lock_guard<std::mutex> lock(m_pendingReqMtx);
-
-  auto it = m_pendingRequests.find(msg.id);
-  if (it == m_pendingRequests.end())
-    return;
-
-  if (msg.isSuccess()) {
-    // TODO: handle the error and results
-  }
-
-  m_pendingRequests.erase(it);
 }
 
 void TradingStreamController::_parse_msg(const std::string &&msg) {
@@ -142,31 +153,8 @@ void TradingStreamController::_parse_msg(const std::string &&msg) {
     res.error_msg = errMsgStr;
   }
 
-  m_resultsQueue.push_message(std::move(res));
+  m_tradingMsgQueues->resultsQueue.push_message(std::move(res));
 }
-/*
-std::vector<TradeRequest> RequestsList::get_list() const {
-  std::lock_guard<std::mutex> lock(m_mtx);
-  return m_list;
-}
-
-void RequestsList::add_to_list(const TradeRequest &req) {
-  std::lock_guard<std::mutex> lock(m_mtx);
-  m_list.push_back(req);
-}
-
-void RequestsList::remove_from_list(const TradeRequest &request) {
-  std::lock_guard<std::mutex> lock(m_mtx);
-  auto it =
-      std::find_if(m_list.begin(), m_list.end(),
-                   [&request](const TradeRequest &r) { return r == request;
-});
-
-  if (it != m_list.end()) {
-    m_list.erase(it);
-  }
-}
-*/
 
 std::string TradingStreamController::create_order(const TradeRequest &req) {
   m_queryBuilder->setMethod(TRADE_STREAM_METHOD::ORDER_PLACE);
@@ -207,11 +195,14 @@ std::string TradingStreamController::create_order(const TradeRequest &req) {
   if (query) {
     NetError netErr = m_tradeStream->execute_query(query.value());
 
+    auto value =
+        query.value().get_value(std::string(TradingStreamQueryBuilder::ID));
+
+    std::string id_str = (value ? value->get<std::string>() : "");
+
     {
       std::lock_guard<std::mutex> lock(m_pendingReqMtx);
-      m_pendingRequests.emplace(
-          req.getClientOrderId(),
-          std::make_pair(req, TRADE_STREAM_METHOD::ORDER_PLACE));
+      m_pendingRequests.emplace(id_str, TRADE_STREAM_METHOD::ORDER_PLACE);
     }
 
     if (!netErr.hasError()) {
@@ -242,13 +233,14 @@ bool TradingStreamController::cancel_order(const TradeRequest &req) {
   if (query) {
     NetError netErr = m_tradeStream->execute_query(query.value());
 
-    Log::log(query->str());
+    auto value =
+        query.value().get_value(std::string(TradingStreamQueryBuilder::ID));
+
+    std::string id_str = (value ? value->get<std::string>() : "");
 
     {
       std::lock_guard<std::mutex> lock(m_pendingReqMtx);
-      m_pendingRequests.emplace(
-          req.getClientOrderId(),
-          std::make_pair(req, TRADE_STREAM_METHOD::ORDER_CANCEL));
+      m_pendingRequests.emplace(id_str, TRADE_STREAM_METHOD::ORDER_CANCEL);
     }
 
     if (!netErr.hasError()) {
@@ -279,11 +271,14 @@ bool TradingStreamController::get_order_status(const TradeRequest &req) {
   if (query) {
     NetError netErr = m_tradeStream->execute_query(query.value());
 
+    auto value =
+        query.value().get_value(std::string(TradingStreamQueryBuilder::ID));
+
+    std::string id_str = (value ? value->get<std::string>() : "");
+
     {
       std::lock_guard<std::mutex> lock(m_pendingReqMtx);
-      m_pendingRequests.emplace(
-          req.getClientOrderId(),
-          std::make_pair(req, TRADE_STREAM_METHOD::ORDER_STATUS));
+      m_pendingRequests.emplace(id_str, TRADE_STREAM_METHOD::ORDER_STATUS);
     }
 
     if (!netErr.hasError()) {

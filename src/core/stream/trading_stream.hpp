@@ -124,10 +124,12 @@ private:
   void _add_rsa_signature();
   void _add_params_query();
 
-private:
+public:
   static constexpr std::string_view PARAMS = "params";
   static constexpr std::string_view METHOD = "method";
   static constexpr std::string_view ID = "id";
+
+private:
   static constexpr std::string_view PARAM_APIKEY = "apiKey";
   static constexpr std::string_view PARAM_SIGNATURE = "signature";
   static constexpr std::string_view PARAM_TIMESTAMP = "timestamp";
