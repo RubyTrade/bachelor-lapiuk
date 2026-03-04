@@ -3,6 +3,7 @@
 
 #include "core/controllers/trading_stream_utils.hpp"
 #include "core/net/net.hpp"
+#include "core/parsers/trading_stream_parser.hpp"
 #include "core/stream/trading_stream.hpp"
 #include "core/utils/queue.hpp"
 
@@ -14,18 +15,13 @@
 
 namespace Trading {
 
-/*
-class RequestsList {
-public:
-  std::vector<TradeRequest> get_list() const;
-  void add_to_list(const TradeRequest &req);
-  void remove_from_list(const TradeRequest &req);
+struct MessageStreams {
+  // Main string message queue
+  Queue<std::string> msgQueue;
 
-private:
-  mutable std::mutex m_mtx;
-  std::vector<TradeRequest> m_list;
+  // Queue for parsed messages
+  ObservableQueue<ResultMessage> resultsQueue;
 };
-*/
 
 class TradingStreamController {
 public:
@@ -36,6 +32,7 @@ public:
   bool get_order_status(const TradeRequest &req);
 
   // TODO: support more requests
+  // TODO: implement easy interface to get parsed data
 
 private:
   void _start_listen_thread();
@@ -47,7 +44,7 @@ private:
 
   void _parse_msg(const std::string &&msg);
 
-  void _fulfill_pending_result(const ResultMessage &msg);
+  TRADE_STREAM_METHOD _get_pending_method(const std::string &id);
 
 private:
   // Main stream
@@ -61,12 +58,11 @@ private:
   std::unique_ptr<Thread> m_readThread;
 
   // Main string message queue
-  Queue<std::string> m_msgQueue;
+  std::unique_ptr<MessageStreams> m_tradingMsgQueues;
+  std::unique_ptr<Queue<ParsedTradingStream>> m_parsedTradingData;
 
-  ObservableQueue<ResultMessage> m_resultsQueue;
-
-  std::unordered_map<std::string, std::pair<TradeRequest, TRADE_STREAM_METHOD>>
-      m_pendingRequests;
+  // key - req id
+  std::unordered_map<std::string, TRADE_STREAM_METHOD> m_pendingRequests;
   std::mutex m_pendingReqMtx;
 };
 

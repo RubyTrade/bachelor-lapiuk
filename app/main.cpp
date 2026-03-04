@@ -23,7 +23,9 @@
 #include "core/controllers/user_data_stream_controller.hpp"
 #include "core/net/net.hpp"
 #include "core/parsers/account_rest_api_parser.hpp"
+#include "core/parsers/common_parser_utils.hpp"
 #include "core/parsers/market_data_parser.hpp"
+#include "core/parsers/trading_stream_parser.hpp"
 #include "core/stream/market_stream.hpp"
 #include "core/stream/trading_stream.hpp"
 #include "core/stream/user_data_stream.hpp"
@@ -52,7 +54,7 @@ int main(int argc, char *argv[]) {
   Env::getInstance().setenv("BINANCE_PRIVATE_KEY", oss.str());
 
   // MarketStream test
-
+  /*
   std::unique_ptr<AccountRestApi::AccountRestApiController> controller =
       std::make_unique<AccountRestApi::AccountRestApiController>();
 
@@ -67,7 +69,7 @@ int main(int argc, char *argv[]) {
   controller->request_account_info();
   controller->request_account_balance();
   controller->request_commission_rate("BTCUSDT");
-
+*/
   /*
   std::unique_ptr<Market::MarketDataController> market_controller =
       std::make_unique<Market::MarketDataController>();
@@ -86,7 +88,6 @@ int main(int argc, char *argv[]) {
     Log::log(elem.symbol);
   }
   */
-  /*
   // UserDataStream test
   std::unique_ptr<UserData::UserDataStreamController> userdata_controller =
       std::make_unique<UserData::UserDataStreamController>();
@@ -97,17 +98,6 @@ int main(int argc, char *argv[]) {
 
   userdata_controller->subscribe_to_publisher(order_book.get());
   userdata_controller->subscribe_to_publisher(account_controller.get());
-*/
-  /*
-  // Fixed num test
-  Fixed num(123.1232434, 2);
-  Fixed num2(0.0015555555, 6);
-
-  Log::log("Fixed num: ", false);
-  Log::log((num2 + num2).to_string());
-  Log::log((num > num2) ? "true" : "false");
-*/
-  /*
   // TradingStream test
   std::unique_ptr<Trading::TradingStreamController> trading_controller =
       std::make_unique<Trading::TradingStreamController>();
@@ -146,7 +136,7 @@ int main(int argc, char *argv[]) {
       order_book->getOrderByClientId(req2.getClientOrderId());
 
   Log::log("order2: " + order2->symbol);
-*/
+
   /*
   std::optional<JSONQuery> balance_info =
       TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD::ACCOUNT_BALANCE)

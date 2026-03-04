@@ -127,7 +127,7 @@ static constexpr std::array<EnumStringPair<POSITION_SIDE>, 3> POSITION_SIDE_STR{
      {POSITION_SIDE::SHORT, "SHORT"}}};
 
 static constexpr std::array<EnumStringPair<MARGIN_TYPE>, 2> MARGIN_TYPE_STR{
-    {{MARGIN_TYPE::CROSSED, "CROSSED"}, {MARGIN_TYPE::ISOLATED, "ISOLATED"}}};
+    {{MARGIN_TYPE::CROSSED, "cross"}, {MARGIN_TYPE::ISOLATED, "isolated"}}};
 
 static constexpr std::array<EnumStringPair<ORDER_SIDE>, 2> ORDER_SIDE_STR{
     {{ORDER_SIDE::BUY, "BUY"}, {ORDER_SIDE::SELL, "SELL"}}};
