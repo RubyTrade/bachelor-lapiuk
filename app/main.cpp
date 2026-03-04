@@ -1,3 +1,4 @@
+#include <boost/beast/websocket/detail/frame.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -16,10 +17,12 @@
 
 #include "core/account_manager/account_controller.hpp"
 #include "core/account_manager/order_book.hpp"
+#include "core/controllers/account_rest_api_controller.hpp"
 #include "core/controllers/market_data_controller.hpp"
 #include "core/controllers/trading_stream_controller.hpp"
 #include "core/controllers/user_data_stream_controller.hpp"
 #include "core/net/net.hpp"
+#include "core/parsers/account_rest_api_parser.hpp"
 #include "core/parsers/market_data_parser.hpp"
 #include "core/stream/market_stream.hpp"
 #include "core/stream/trading_stream.hpp"
@@ -48,12 +51,22 @@ int main(int argc, char *argv[]) {
 
   Env::getInstance().setenv("BINANCE_PRIVATE_KEY", oss.str());
 
-  AccountController account_controller;
-  std::cout << "Last update time: " << account_controller.getLastUpdateTime();
   // MarketStream test
 
-  // test_market_data_parsing();
-  // test_user_data_parsing();
+  std::unique_ptr<AccountRestApi::AccountRestApiController> controller =
+      std::make_unique<AccountRestApi::AccountRestApiController>();
+
+  controller->register_parsed_data_callback(
+      [&](const AccountRestApi::ParsedAccountRestApi &data) {
+        if (!std::holds_alternative<ErrorParse>(data)) {
+          Log::log("success");
+        }
+        return;
+      });
+
+  controller->request_account_info();
+  controller->request_account_balance();
+  controller->request_commission_rate("BTCUSDT");
 
   /*
   std::unique_ptr<Market::MarketDataController> market_controller =

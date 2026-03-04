@@ -50,16 +50,90 @@ int Fixed::_constraint_scale(int scale) {
 }
 
 int64_t Fixed::_value_from_string(const std::string &str, int scale) {
-  double d = std::stod(str);
-  return static_cast<int64_t>(d * std::pow(10, scale));
+  // Parse string manually to avoid floating-point precision loss
+  bool isNegative = false;
+  size_t startPos = 0;
+  
+  if (!str.empty() && str[0] == '-') {
+    isNegative = true;
+    startPos = 1;
+  }
+  
+  size_t dotPos = str.find('.');
+  
+  int64_t integerPart = 0;
+  int64_t fractionalPart = 0;
+  int fractionalDigits = 0;
+  
+  if (dotPos == std::string::npos) {
+    // No decimal point
+    for (size_t i = startPos; i < str.length(); ++i) {
+      if (str[i] >= '0' && str[i] <= '9') {
+        integerPart = integerPart * 10 + (str[i] - '0');
+      }
+    }
+  } else {
+    // Parse integer part
+    for (size_t i = startPos; i < dotPos; ++i) {
+      if (str[i] >= '0' && str[i] <= '9') {
+        integerPart = integerPart * 10 + (str[i] - '0');
+      }
+    }
+    
+    // Parse fractional part
+    for (size_t i = dotPos + 1; i < str.length(); ++i) {
+      if (str[i] >= '0' && str[i] <= '9') {
+        fractionalPart = fractionalPart * 10 + (str[i] - '0');
+        fractionalDigits++;
+      }
+    }
+  }
+  
+  // Calculate multiplier for integer part
+  int64_t multiplier = 1;
+  for (int i = 0; i < scale; ++i) {
+    multiplier *= 10;
+  }
+  
+  int64_t result = integerPart * multiplier;
+  
+  // Add fractional part adjusted to the target scale
+  if (fractionalDigits > 0) {
+    if (fractionalDigits < scale) {
+      // Need to multiply fractional part
+      for (int i = fractionalDigits; i < scale; ++i) {
+        fractionalPart *= 10;
+      }
+      result += fractionalPart;
+    } else if (fractionalDigits > scale) {
+      // Need to divide fractional part
+      for (int i = scale; i < fractionalDigits; ++i) {
+        fractionalPart /= 10;
+      }
+      result += fractionalPart;
+    } else {
+      result += fractionalPart;
+    }
+  }
+  
+  return isNegative ? -result : result;
 }
 
 int64_t Fixed::_value_from_double(double val, int scale) {
-  return static_cast<int64_t>(val * std::pow(10, scale));
+  double multiplier = 1.0;
+  for (int i = 0; i < scale; ++i) {
+    multiplier *= 10.0;
+  }
+  return static_cast<int64_t>(val * multiplier);
 }
 
 std::string Fixed::to_string() const {
-  const int64_t base = static_cast<int64_t>(std::pow(10, m_scale));
+  // Calculate base using integer multiplication to avoid floating-point errors
+  int64_t base = 1;
+  for (int i = 0; i < m_scale; ++i) {
+    base *= 10;
+  }
+  
   const bool isNegative = (m_value < 0);
   const int64_t absValue = std::llabs(m_value);
 

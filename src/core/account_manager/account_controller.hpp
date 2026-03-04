@@ -2,6 +2,7 @@
 #define ACCOUNT_CONTROLLER_HPP
 
 #include "core/controllers/user_data_stream_controller.hpp"
+#include "core/parsers/account_rest_api_parser.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
 #include "core/utils/constants.hpp"
 #include "core/utils/fixed_num.hpp"
@@ -12,8 +13,10 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 
 struct BalanceAsset {
   std::string assetName{};
@@ -80,18 +83,70 @@ private:
   std::mutex m_balanceListMutex;
 };
 
+struct SymbolConfig {
+  uint32_t leverage = 1;
+  MARGIN_TYPE marginType = MARGIN_TYPE::CROSSED;
+  bool isActive = true;
+};
+
+struct AccountPermissions {
+  bool canTrade = false;
+  bool canDeposit = false;
+  bool canWithdraw = false;
+  uint32_t feeTier = 0;
+};
+
+struct RiskManagementConfig {
+  uint32_t maxLeverage = 20;
+  Fixed maxPositionSize{};
+  Fixed maxTotalPositionValue{};
+  bool autoReduceOnMarginCall = false;
+};
+
 class AccountConfig {
 public:
+  // Leverage management
   void updateLeverage(const std::string &symbol, uint32_t leverage);
-  void updateMultiAssetMode(bool mode);
-
   uint32_t getLeverageConfig(const std::string &symbol) const;
+
+  // Multi-asset mode
+  void updateMultiAssetMode(bool mode);
   bool getMultiAssetMode() const;
 
+  // Symbol configuration
+  void updateSymbolConfig(const std::string &symbol, const SymbolConfig &config);
+  void setMarginType(const std::string &symbol, MARGIN_TYPE marginType);
+  std::optional<SymbolConfig> getSymbolConfig(const std::string &symbol) const;
+  MARGIN_TYPE getMarginType(const std::string &symbol) const;
+
+  // Account permissions
+  void updatePermissions(const AccountPermissions &permissions);
+  AccountPermissions getPermissions() const;
+  bool canTrade() const;
+
+  // Risk management
+  void updateRiskConfig(const RiskManagementConfig &config);
+  RiskManagementConfig getRiskConfig() const;
+
+  // Commission rates
+  void updateCommissionRate(const std::string &symbol, Fixed maker, Fixed taker);
+  std::pair<Fixed, Fixed> getCommissionRate(const std::string &symbol) const;
+
+  // Active symbols
+  std::set<std::string> getActiveSymbols() const;
+  void setSymbolActive(const std::string &symbol, bool active);
+
 private:
-  // key = symbol, value = leverage
-  std::unordered_map<std::string, uint32_t> m_leverageConfig{};
-  bool m_multiAssetModeUpdate = false;
+  // Symbol configurations (leverage, margin type, etc.)
+  std::unordered_map<std::string, SymbolConfig> m_symbolConfigs{};
+
+  // Commission rates per symbol (maker, taker)
+  std::unordered_map<std::string, std::pair<Fixed, Fixed>> m_commissionRates{};
+
+  // Account-level settings
+  bool m_multiAssetMode = false;
+  AccountPermissions m_permissions{};
+  RiskManagementConfig m_riskConfig{};
 
   mutable std::mutex m_configMutex;
 };
@@ -106,6 +161,14 @@ public:
   const std::set<std::string> &getBalancesList() const;
   const std::set<std::string> &getPositionsList() const;
 
+  // REST API response processing
+  void processRestApiResponse(const AccountRestApi::ParsedAccountRestApi &response);
+
+  // Access to sub-components
+  const AccountConfig& getConfig() const { return *m_config; }
+  AccountConfig& getConfig() { return *m_config; }
+
+  // UserEventListener interface
   void enqueue(UserData::ParsedUserData event) override;
   void start() override;
   void stop() override;

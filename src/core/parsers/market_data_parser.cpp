@@ -40,10 +40,11 @@ MarketDataParser::_detect_msg_type(const StreamMessage &msg) {
 }
 
 /* static */ ParsedMarketData TradeDataParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  TradeData data;
+  try {
+    JSONQuery jsonData = msg.data;
+    TradeData data;
 
-  if (auto val = jsonData.get_value(std::string(EVENT_TIME));
+    if (auto val = jsonData.get_value(std::string(EVENT_TIME));
       val && val->is_number_unsigned()) {
     data.eventTime = val->get<uint64_t>();
   } else {
@@ -104,14 +105,18 @@ MarketDataParser::_detect_msg_type(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in TradeDataParser: " + std::string(e.what())};
+  }
 }
 
 /* static */ ParsedMarketData
 AggTradeDataParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  AggTradeData data;
+  try {
+    JSONQuery jsonData = msg.data;
+    AggTradeData data;
 
-  if (auto val = jsonData.get_value(std::string(EVENT_TIME));
+    if (auto val = jsonData.get_value(std::string(EVENT_TIME));
       val && val->is_number_unsigned()) {
     data.eventTime = val->get<uint64_t>();
   } else {
@@ -185,14 +190,18 @@ AggTradeDataParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in AggTradeDataParser: " + std::string(e.what())};
+  }
 }
 
 /* static */ ParsedMarketData
 MarkPriceDataParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  MarkPriceData data;
+  try {
+    JSONQuery jsonData = msg.data;
+    MarkPriceData data;
 
-  if (auto val = jsonData.get_value(std::string(EVENT_TIME));
+    if (auto val = jsonData.get_value(std::string(EVENT_TIME));
       val && val->is_number_unsigned()) {
     data.eventTime = val->get<uint64_t>();
   } else {
@@ -246,6 +255,9 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in MarkPriceDataParser: " + std::string(e.what())};
+  }
 }
 
 /* static */ bool DepthDataParser::parsePriceQty(const nlohmann::json &entry,
@@ -265,10 +277,11 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
 }
 
 /* static */ ParsedMarketData DepthDataParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  DepthData data;
+  try {
+    JSONQuery jsonData = msg.data;
+    DepthData data;
 
-  if (auto val = jsonData.get_value(std::string(EVENT_TIME));
+    if (auto val = jsonData.get_value(std::string(EVENT_TIME));
       val && val->is_number_unsigned()) {
     data.eventTime = val->get<uint64_t>();
   } else {
@@ -339,14 +352,18 @@ MarkPriceDataParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in DepthDataParser: " + std::string(e.what())};
+  }
 }
 
 /* static */ ParsedMarketData
 BookTickerDataParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  BookTickerData data;
+  try {
+    JSONQuery jsonData = msg.data;
+    BookTickerData data;
 
-  if (auto val = jsonData.get_value(std::string(ORDER_BOOK_ID));
+    if (auto val = jsonData.get_value(std::string(ORDER_BOOK_ID));
       val && val->is_number_unsigned()) {
     data.orderBookId = val->get<uint64_t>();
   } else {
@@ -407,4 +424,7 @@ BookTickerDataParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in BookTickerDataParser: " + std::string(e.what())};
+  }
 }

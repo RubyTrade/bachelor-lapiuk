@@ -27,6 +27,7 @@ enum class ORDER_TYPE {
 
 enum class ORDER_SIDE { BUY, SELL };
 enum class POSITION_SIDE { BOTH, LONG, SHORT };
+enum class MARGIN_TYPE { CROSSED, ISOLATED };
 
 /*
 GTC - Good Till Cancel (GTC order valitidy is 1 year from placement)
@@ -125,6 +126,9 @@ static constexpr std::array<EnumStringPair<POSITION_SIDE>, 3> POSITION_SIDE_STR{
      {POSITION_SIDE::LONG, "LONG"},
      {POSITION_SIDE::SHORT, "SHORT"}}};
 
+static constexpr std::array<EnumStringPair<MARGIN_TYPE>, 2> MARGIN_TYPE_STR{
+    {{MARGIN_TYPE::CROSSED, "CROSSED"}, {MARGIN_TYPE::ISOLATED, "ISOLATED"}}};
+
 static constexpr std::array<EnumStringPair<ORDER_SIDE>, 2> ORDER_SIDE_STR{
     {{ORDER_SIDE::BUY, "BUY"}, {ORDER_SIDE::SELL, "SELL"}}};
 
@@ -153,6 +157,10 @@ inline static constexpr std::string_view BINANCE_READ_APIKEY_ENV =
 inline static constexpr std::string_view BINANCE_WRITE_APIKEY_ENV =
     "BINANCE_WRITE_API_KEY";
 inline static constexpr std::string_view BINANCE_PK_ENV = "BINANCE_PRIVATE_KEY";
+inline static constexpr std::string_view BINANCE_READ_REST_APIKEY_ENV =
+    "BINANCE_READ_REST_API_KEY";
+inline static constexpr std::string_view BINANCE_READ_REST_SECRET_KEY_ENV =
+    "BINANCE_READ_REST_SECRET_KEY";
 
 inline constexpr std::string_view WS_HOST = "fstream.binance.com";
 inline constexpr std::string_view WS_TRADING_HOST = "ws-fapi.binance.com";
@@ -163,6 +171,13 @@ inline constexpr std::string_view WS_TRADING_API_TARGET = "/ws-fapi/v1";
 inline constexpr std::string_view API_HOST = "fapi.binance.com";
 
 inline constexpr std::string_view API_DEFAULT_TARGET = "/fapi/v1/";
+
+// REST API Endpoints
+namespace ApiEndpoints {
+inline constexpr std::string_view ACCOUNT_INFO = "/fapi/v2/account";
+inline constexpr std::string_view ACCOUNT_BALANCE = "/fapi/v2/balance";
+inline constexpr std::string_view COMMISSION_RATE = "/fapi/v1/commissionRate";
+} // namespace ApiEndpoints
 
 inline constexpr int WS_PORT_MAIN = 443;
 inline constexpr int HTTPS_PORT = 443;

@@ -115,3 +115,11 @@ void JSONQuery::remove_key(const std::string &key) {
 }
 
 bool JSONQuery::is_empty() const { return m_jsonQuery.empty(); }
+
+bool JSONQuery::is_array() const { return m_jsonQuery.is_array(); }
+
+std::optional<nlohmann::json> JSONQuery::get_array() const {
+  if (m_jsonQuery.is_array())
+    return m_jsonQuery;
+  return std::nullopt;
+}
