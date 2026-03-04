@@ -9,16 +9,22 @@ CLEAN_FLAG=false
 RUN_FLAG=false
 DEBUG_FLAG=false
 # Args
-while getopts "crd" opt; do
+while getopts "crdt" opt; do
   case $opt in
-    c) echo "=== Clean build ===" 
+    c) echo "=== Clean build ==="
       CLEAN_FLAG=true
       ;;
-    r) echo "=== Will Run the Project after the build ===" 
+    r) echo "=== Will Run the Project after the build ==="
       RUN_FLAG=true
       ;;
-    d) echo "=== Will build in Debug mode ==="
+    a) echo "=== ASan + UBSan ==="
+      ASAN_FLAG=true
+      ;;
+    d) echo "=== Debug build==="
       DEBUG_FLAG=true
+      ;;
+    t) echo "=== Thread sanitizer build ==="
+      TSAN_FLAG=true
       ;;
     *) echo "=== Unknown option ===" ;;
   esac
@@ -37,16 +43,36 @@ build ()
   echo "=== Starting CMake build ==="
   cd $SCRIPT_DIR/build
    
-  local DEBUG_ARGS=""
-  if [[ $DEBUG_FLAG = "true" ]]; then
-    DEBUG_ARGS="-DCMAKE_BUILD_TYPE=Debug"
-    echo "=== Building in Debug mode ==="
+  CMAKE_ARGS=()
+
+  # --- Build type
+  if [[ $DEBUG_FLAG == "true" || $TSAN_FLAG == "true" ]]; then
+    CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=Debug)
   else
-    echo "=== Building in Release mode ==="
+    CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=Release)
   fi
 
-  cmake ${DEBUG_ARGS} ..
+  # --- Sanitizers
+  if [[ $ASAN_FLAG == "true" ]]; then
+    echo "=== Using ASan + UBSan ==="
+    CMAKE_ARGS+=(
+      "-DCMAKE_CXX_FLAGS=-O0 -g -fsanitize=address,undefined"
+      "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
+    )
+  fi
+
+  if [[ $TSAN_FLAG == "true" ]]; then
+    echo "=== Using ThreadSanitizer ==="
+    CMAKE_ARGS+=(
+      "-DCMAKE_CXX_FLAGS=-O1 -g -fsanitize=thread"
+      "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread"
+    )
+  fi
+
+  cmake .. "${CMAKE_ARGS[@]}"
+
   make
+
   echo "=== Finished CMake build ==="
 }
 

@@ -161,6 +161,30 @@ public:
     return base64_encode(signature.data(), siglen);
   }
 
+  static std::string sign_hmac_sha256(const std::string &secret_key,
+                                      const std::string &message) {
+    unsigned char *digest = HMAC(
+        EVP_sha256(), secret_key.data(), secret_key.size(),
+        reinterpret_cast<const unsigned char *>(message.data()), message.size(),
+        nullptr, nullptr);
+
+    if (!digest) {
+      Log::log_err("HMAC_SHA256 signing failed");
+      return {};
+    }
+
+    // Convert to hex string
+    std::string result;
+    result.reserve(64); // SHA256 produces 32 bytes = 64 hex chars
+    char buf[3];
+    for (int i = 0; i < 32; ++i) {
+      snprintf(buf, sizeof(buf), "%02x", digest[i]);
+      result += buf;
+    }
+
+    return result;
+  }
+
 private:
   static std::string base64_encode(const unsigned char *buffer, size_t length) {
     BIO *bio, *b64;

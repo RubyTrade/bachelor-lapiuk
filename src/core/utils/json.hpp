@@ -33,6 +33,8 @@ public:
   std::optional<nlohmann::json> get_value(const std::string &key) const;
   bool is_key_exists(const std::string &key) const;
   bool is_empty() const;
+  bool is_array() const;
+  std::optional<nlohmann::json> get_array() const;
 
   std::map<std::string, JSONValue> get_map_of_items() const;
 

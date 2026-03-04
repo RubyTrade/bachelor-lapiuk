@@ -84,6 +84,8 @@ public:
     m_queue.push_message(std::move(msg));
   }
 
+  bool pop_message(QueueType &out_msg) { return m_queue.pop_message(out_msg); }
+
   void register_callback(std::function<void(const QueueType &)> cb) {
     m_callback = cb;
   }

@@ -28,10 +28,11 @@ UserDataStreamParser::parse(const StreamMessage &msg) {
 
 /* static */ ParsedUserData
 OrderTradeUpdateParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  OrderTradeUpdateEvent data;
+  try {
+    JSONQuery jsonData = msg.data;
+    OrderTradeUpdateEvent data;
 
-  // --- TOP LEVEL TIME ---
+    // --- TOP LEVEL TIME ---
   if (auto val = jsonData.get_value(std::string(EVENT_TIME));
       val && val->is_number_unsigned()) {
     data.eventTime = val->get<uint64_t>();
@@ -241,12 +242,16 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in OrderTradeUpdateParser: " + std::string(e.what())};
+  }
 }
 /* static */ ParsedUserData TradeLiteParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  TradeLiteEvent data;
+  try {
+    JSONQuery jsonData = msg.data;
+    TradeLiteEvent data;
 
-  if (auto val = jsonData.get_value(std::string(ORDER_ID));
+    if (auto val = jsonData.get_value(std::string(ORDER_ID));
       val && val->is_number_unsigned()) {
     data.orderId = val->get<uint64_t>();
   } else {
@@ -314,14 +319,18 @@ OrderTradeUpdateParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in TradeLiteParser: " + std::string(e.what())};
+  }
 }
 
 /* static */ ParsedUserData
 AccountUpdateParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  AccountUpdateEvent data;
+  try {
+    JSONQuery jsonData = msg.data;
+    AccountUpdateEvent data;
 
-  auto accVal = jsonData.get_value(std::string(ACCOUNT));
+    auto accVal = jsonData.get_value(std::string(ACCOUNT));
   if (!accVal || !accVal->is_object()) {
     return ErrorParse{"account object is not parsed"};
   }
@@ -424,13 +433,17 @@ AccountUpdateParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in AccountUpdateParser: " + std::string(e.what())};
+  }
 }
 
 /* static */ ParsedUserData MarginCallParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  MarginCallEvent data;
+  try {
+    JSONQuery jsonData = msg.data;
+    MarginCallEvent data;
 
-  if (auto val = jsonData.get_value(std::string(CROSS_WALLET));
+    if (auto val = jsonData.get_value(std::string(CROSS_WALLET));
       val && val->is_string()) {
     data.crossWalletBalance =
         Fixed::str_to_fixed(val->get_ref<const std::string &>());
@@ -486,14 +499,18 @@ AccountUpdateParser::parse(const StreamMessage &msg) {
   }
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in MarginCallParser: " + std::string(e.what())};
+  }
 }
 
 /* static */ ParsedUserData
 AccountConfigUpdateParser::parse(const StreamMessage &msg) {
-  JSONQuery jsonData = msg.data;
-  AccountConfigUpdateEvent data;
+  try {
+    JSONQuery jsonData = msg.data;
+    AccountConfigUpdateEvent data;
 
-  if (auto val = jsonData.get_value(std::string(LEVERAGE_OBJ));
+    if (auto val = jsonData.get_value(std::string(LEVERAGE_OBJ));
       val && val->is_object()) {
 
     JSONQuery obj = *val;
@@ -531,4 +548,7 @@ AccountConfigUpdateParser::parse(const StreamMessage &msg) {
     data.transactionTime = val->get<uint64_t>();
 
   return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in AccountConfigUpdateParser: " + std::string(e.what())};
+  }
 }
