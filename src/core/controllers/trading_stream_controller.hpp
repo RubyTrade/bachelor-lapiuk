@@ -35,6 +35,8 @@ public:
   // TODO: implement easy interface to get parsed data
 
 private:
+  void _reconnect();
+
   void _start_listen_thread();
   void _start_read_thread();
 
@@ -64,6 +66,8 @@ private:
   // key - req id
   std::unordered_map<std::string, TRADE_STREAM_METHOD> m_pendingRequests;
   std::mutex m_pendingReqMtx;
+
+  std::atomic_bool m_is_stream_running{false};
 };
 
 } // namespace Trading

@@ -18,10 +18,6 @@ NetError UserDataStream::connect_to_websocket(const std::string &listenKey) {
   return wsErr;
 }
 
-void UserDataStream::disconnect_from_websocket() {
-  Stream::m_webSocket->stop_websocket();
-}
-
 NetError UserDataStream::connect_to_websocket() {
   NetError wsErr{NetErrorType::UNDEFINED,
                  "connect_to_websocket should be passed with explicit "

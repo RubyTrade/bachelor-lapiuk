@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace Market;
 
@@ -29,6 +30,7 @@ MarketDataController::MarketDataController()
 
   NetError wsErr = m_marketStream->connect_to_websocket();
   if (!wsErr.hasError()) {
+    m_is_stream_running = true;
     _start_listen_thread();
     _start_read_thread();
   }
@@ -41,6 +43,31 @@ MarketDataController::MarketDataController()
         m_parsedStreamData->push_message(MarketDataParser::parse(msg));
       });
 };
+
+void MarketDataController::_reconnect() {
+  m_is_stream_running = false;
+
+  std::vector<MarketRequest> current_list = m_subList.get_list();
+
+  m_listenThread->stop();
+
+  m_marketMsgQueues->msgQueue.stop_queue();
+
+  m_readThread->stop();
+  m_subList.clear_the_list();
+  m_marketStream->disconnect_from_websocket();
+
+  NetError wsErr = m_marketStream->connect_to_websocket();
+  if (!wsErr.hasError()) {
+    m_marketMsgQueues->msgQueue.start_queue();
+    m_is_stream_running = true;
+    _start_listen_thread();
+    _start_read_thread();
+  }
+
+  // Automatically resubscribe to symbols
+  _resubscribe_to_list(current_list);
+}
 
 std::vector<MarketRequest> SubscriptionsList::get_list() const {
   std::lock_guard<std::mutex> lock(m_mtx);
@@ -60,6 +87,18 @@ void SubscriptionsList::remove_from_list(const MarketRequest &request) {
 
   if (it != m_list.end()) {
     m_list.erase(it);
+  }
+}
+
+void SubscriptionsList::clear_the_list() {
+  std::lock_guard<std::mutex> lock(m_mtx);
+  m_list.clear();
+}
+
+void MarketDataController::_resubscribe_to_list(
+    const std::vector<MarketRequest> &list) {
+  for (auto &req : list) {
+    subscribe_to(req);
   }
 }
 
@@ -168,14 +207,19 @@ std::vector<MarketRequest> MarketDataController::get_list_of_subscriptions() {
 }
 
 void MarketDataController::_start_listen_thread() {
-  m_listenThread->start(&MarketStream::start_listening, m_marketStream.get());
+  auto errHandler = [this]() { _reconnect(); };
+
+  m_listenThread->start(
+      [ptr = m_marketStream.get(), h = std::move(errHandler)]() mutable {
+        ptr->start_listening(std::move(h));
+      });
 }
 void MarketDataController::_start_read_thread() {
   m_readThread->start(&MarketDataController::_start_buffer_reading, this);
 }
 
 void MarketDataController::_start_buffer_reading() {
-  while (true) {
+  while (m_is_stream_running) {
     std::string out_msg;
     bool res = m_marketMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {
