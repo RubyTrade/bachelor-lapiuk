@@ -32,6 +32,10 @@ NetError Stream::_connect_to_websocket(const std::string &host, int port,
   return wsErr;
 }
 
+void Stream::disconnect_from_websocket() { _disconnect_from_websocket(); }
+
+void Stream::_disconnect_from_websocket() { m_webSocket->stop_websocket(); }
+
 NetError Stream::_execute_query(const JSONQuery &query) {
   NetError wsErr;
   if (!query.is_empty()) {
@@ -43,7 +47,8 @@ NetError Stream::_execute_query(const JSONQuery &query) {
   return wsErr;
 }
 
-void Stream::start_listening() {
+void Stream::start_listening(std::function<void()> &&onError_handler) {
   m_webSocket->start_async_read(
-      [this](std::string &&msg) { m_msgQueue.push_message(std::move(msg)); });
+      [this](std::string &&msg) { m_msgQueue.push_message(std::move(msg)); },
+      std::move(onError_handler));
 }

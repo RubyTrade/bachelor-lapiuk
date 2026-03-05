@@ -4,6 +4,7 @@
 #include "core/utils/log.hpp"
 #include "core/utils/thread.hpp"
 #include "nlohmann/json_fwd.hpp"
+#include <algorithm>
 #include <atomic>
 #include <boost/asio/execution/prefer_only.hpp>
 #include <boost/asio/executor_work_guard.hpp>
@@ -112,6 +113,7 @@ public:
 // ---------------------------- WebSocket ------------------------------
 
 using MessageHandler = std::function<void(std::string &&)>;
+using OnErrorHandler = std::function<void()>;
 
 // WebSocket
 class WebSocket {
@@ -125,13 +127,17 @@ public:
   void async_write_text(const std::string msg);
   void async_write_json(const nlohmann::json json);
 
-  void start_async_read(MessageHandler &&handler);
+  void start_async_read(MessageHandler &&handler, OnErrorHandler &&errHandler);
   void run_io_context();
 
   void stop_websocket();
 
+  bool is_ws_running() const { return m_is_ws_running.load(); }
+
 private:
+  void _set_up_websocket();
   void _set_message_handler(MessageHandler &&handler);
+  void _set_onError_handler(OnErrorHandler &&errHandler);
   void _read_async();
 
   const tcp_resolve_results _resolve_host(const std::string &host, int port);
@@ -149,16 +155,19 @@ private:
   tcp::resolver m_resolver;
 
   // Websocket
-  websocket::stream<beast::ssl_stream<tcp::socket>> m_websocket;
+  std::unique_ptr<websocket::stream<beast::ssl_stream<tcp::socket>>>
+      m_websocket;
 
   std::optional<work_guard_t> m_work_guard;
-  std::atomic_bool m_is_io_running;
+  std::atomic_bool m_is_io_running{false};
+  std::atomic_bool m_is_ws_running{false};
 
   Thread m_io_context_thread;
 
   beast::flat_buffer m_buffer;
 
-  MessageHandler m_handler; // handler for websocket messages
+  MessageHandler m_handler;    // handler for websocket messages
+  OnErrorHandler m_errHandler; // handler for websocket errors
 };
 
 // ---------------------------- Http ------------------------------

@@ -29,9 +29,12 @@ TradingStreamController::TradingStreamController()
 
   NetError wsErr = m_tradeStream->connect_to_websocket();
   if (!wsErr.hasError()) {
+    m_is_stream_running = true;
     _start_listen_thread();
     _start_read_thread();
   }
+
+  _do_session_logon();
 
   m_tradingMsgQueues->resultsQueue.register_callback(
       [this](const ResultMessage &msg) {
@@ -41,9 +44,27 @@ TradingStreamController::TradingStreamController()
               TradingStreamParser::parse({method, msg}));
         }
       });
+};
+
+void TradingStreamController::_reconnect() {
+  m_is_stream_running = false;
+  m_listenThread->stop();
+
+  m_tradingMsgQueues->msgQueue.stop_queue();
+
+  m_readThread->stop();
+  m_tradeStream->disconnect_from_websocket();
+
+  NetError wsErr = m_tradeStream->connect_to_websocket();
+  if (!wsErr.hasError()) {
+    m_tradingMsgQueues->msgQueue.start_queue();
+    m_is_stream_running = true;
+    _start_listen_thread();
+    _start_read_thread();
+  }
 
   _do_session_logon();
-};
+}
 
 TRADE_STREAM_METHOD
 TradingStreamController::_get_pending_method(const std::string &id) {
@@ -75,14 +96,20 @@ NetError TradingStreamController::_do_session_logon() {
 }
 
 void TradingStreamController::_start_listen_thread() {
-  m_listenThread->start(&TradingStream::start_listening, m_tradeStream.get());
+  auto errHandler = [this]() { _reconnect(); };
+
+  m_listenThread->start(
+      [ptr = m_tradeStream.get(), h = std::move(errHandler)]() mutable {
+        ptr->start_listening(std::move(h));
+      });
 }
+
 void TradingStreamController::_start_read_thread() {
   m_readThread->start(&TradingStreamController::_start_buffer_reading, this);
 }
 
 void TradingStreamController::_start_buffer_reading() {
-  while (true) {
+  while (m_is_stream_running) {
     std::string out_msg;
     bool res = m_tradingMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {

@@ -8,6 +8,7 @@
 #include "core/utils/helper_utils.hpp"
 #include "core/utils/queue.hpp"
 #include <execution>
+#include <utility>
 #include <variant>
 
 using namespace UserData;
@@ -33,6 +34,7 @@ UserDataStreamController::UserDataStreamController()
 
   NetError wsErr = m_userDataStream->connect_to_websocket(listenKey);
   if (!wsErr.hasError()) {
+    m_is_stream_running = true;
     _start_listen_thread();
     _start_read_thread();
   }
@@ -42,22 +44,7 @@ UserDataStreamController::UserDataStreamController()
         // Overall, should not happen in normal flow, since
         // we update the key every 30 minutes
         if (msg.userDataType == USER_DATA_EVENT_TYPE::LISTEN_KEY_EXPIRY) {
-          m_userDataStream->disconnect_from_websocket();
-          std::string listenKey = _create_listenKey();
-
-          m_key_timer->stop();
-          m_key_timer->start_recurring(LISTEN_KEY_EXPIRY_TIME,
-                                       [this]() { this->_update_listenKey(); });
-
-          m_listenThread->stop();
-          m_readThread->stop();
-
-          NetError wsErr = m_userDataStream->connect_to_websocket(listenKey);
-          if (!wsErr.hasError()) {
-            _start_listen_thread();
-            _start_read_thread();
-          }
-
+          _reconnect();
         } else {
           ParsedUserData parsedMsg = UserDataStreamParser::parse(msg);
           if (!std::holds_alternative<ErrorParse>(parsedMsg)) {
@@ -77,6 +64,30 @@ void UserDataStreamController::subscribe_to_publisher(
 void UserDataStreamController::unsubscribe_from_publisher(
     IUserEventListener *listener) {
   m_eventPublisher->unsubscribe(listener);
+}
+
+void UserDataStreamController::_reconnect() {
+  m_is_stream_running = false;
+
+  m_listenThread->stop();
+
+  m_userDataMsgQueues->msgQueue.stop_queue();
+
+  m_readThread->stop();
+  m_userDataStream->disconnect_from_websocket();
+  std::string listenKey = _create_listenKey();
+
+  m_key_timer->stop();
+  m_key_timer->start_recurring(LISTEN_KEY_EXPIRY_TIME,
+                               [this]() { this->_update_listenKey(); });
+
+  NetError wsErr = m_userDataStream->connect_to_websocket(listenKey);
+  if (!wsErr.hasError()) {
+    m_userDataMsgQueues->msgQueue.start_queue();
+    m_is_stream_running = true;
+    _start_listen_thread();
+    _start_read_thread();
+  }
 }
 
 std::string UserDataStreamController::_create_listenKey() {
@@ -131,15 +142,19 @@ void UserDataStreamController::_update_listenKey() {
 }
 
 void UserDataStreamController::_start_listen_thread() {
-  m_listenThread->start(&UserDataStream::start_listening,
-                        m_userDataStream.get());
+  auto errHandler = [this]() { _reconnect(); };
+
+  m_listenThread->start(
+      [ptr = m_userDataStream.get(), h = std::move(errHandler)]() mutable {
+        ptr->start_listening(std::move(h));
+      });
 }
 void UserDataStreamController::_start_read_thread() {
   m_readThread->start(&UserDataStreamController::_start_buffer_reading, this);
 }
 
 void UserDataStreamController::_start_buffer_reading() {
-  while (true) {
+  while (m_is_stream_running) {
     std::string out_msg;
     bool res = m_userDataMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {

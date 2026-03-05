@@ -42,27 +42,40 @@
 
 // WebSocket
 WebSocket::WebSocket(bool useSsl, ssl::context::method context_ssl)
-    : m_is_ssl(useSsl), m_ssl_context(context_ssl), m_resolver(m_io_context),
-      m_websocket(m_io_context, m_ssl_context) {
-  // Turn Off/On SSL verification
-  if (m_is_ssl)
-    m_websocket.next_layer().set_verify_mode(ssl::verify_peer);
-  else
-    m_websocket.next_layer().set_verify_mode(ssl::verify_none);
-}
+    : m_is_ssl(useSsl), m_ssl_context(context_ssl), m_resolver(m_io_context) {}
 
 WebSocket::~WebSocket() { stop_websocket(); }
+
+void WebSocket::_set_up_websocket() {
+  m_websocket =
+      std::make_unique<websocket::stream<beast::ssl_stream<tcp::socket>>>(
+          websocket::stream<beast::ssl_stream<tcp::socket>>(m_io_context,
+                                                            m_ssl_context));
+  // Turn Off/On SSL verification
+  if (m_is_ssl)
+    m_websocket->next_layer().set_verify_mode(ssl::verify_peer);
+  else
+    m_websocket->next_layer().set_verify_mode(ssl::verify_none);
+}
 
 void WebSocket::_set_message_handler(MessageHandler &&handler) {
   m_handler = std::move(handler);
 }
 
+void WebSocket::_set_onError_handler(OnErrorHandler &&errHandler) {
+  m_errHandler = std::move(errHandler);
+}
+
 void WebSocket::_read_async() {
-  m_websocket.async_read(
+  m_websocket->async_read(
       m_buffer, [this](boost::system::error_code ec, std::size_t bytes_sent) {
         if (ec) {
-          // TODO: maybe handle this error
           Log::log_err("\nRead error: " + ec.message());
+          if (m_errHandler && (ec == websocket::error::closed ||
+                               ec == boost::asio::error::connection_reset ||
+                               ec == boost::asio::stream_errc::eof)) {
+            m_errHandler();
+          }
         }
 
         std::string data = beast::buffers_to_string(m_buffer.data());
@@ -72,7 +85,7 @@ void WebSocket::_read_async() {
           m_handler(std::move(data));
         }
 
-        if (m_is_io_running.load())
+        if (m_is_io_running.load() && m_is_ws_running.load())
           _read_async();
       });
 }
@@ -100,8 +113,8 @@ const tcp_resolve_results WebSocket::_resolve_host(const std::string &host,
 
 tcp::endpoint WebSocket::_tcp_connect(const tcp_resolve_results &results) {
   boost::system::error_code error_code;
-  tcp::endpoint endpoint =
-      asio::connect(m_websocket.next_layer().next_layer(), results, error_code);
+  tcp::endpoint endpoint = asio::connect(m_websocket->next_layer().next_layer(),
+                                         results, error_code);
 
   if (error_code) {
     throw NetworkException("connect error: " + error_code.message(),
@@ -114,13 +127,13 @@ tcp::endpoint WebSocket::_tcp_connect(const tcp_resolve_results &results) {
 void WebSocket::_ssl_handshake(const std::string &host) {
   boost::system::error_code error_code;
   // Setting up SNI
-  if (!SSL_set_tlsext_host_name(m_websocket.next_layer().native_handle(),
+  if (!SSL_set_tlsext_host_name(m_websocket->next_layer().native_handle(),
                                 host.c_str())) {
     throw NetworkException("Failed to set SNI",
                            NetErrorType::SSL_HANDSHAKE_ERR);
   }
 
-  m_websocket.next_layer().handshake(ssl::stream_base::client, error_code);
+  m_websocket->next_layer().handshake(ssl::stream_base::client, error_code);
   if (error_code) {
     throw NetworkException("ssl_handshake error: " + error_code.message(),
                            NetErrorType::SSL_HANDSHAKE_ERR);
@@ -131,7 +144,7 @@ void WebSocket::_ssl_handshake(const std::string &host) {
 void WebSocket::_websocket_handshake(const std::string &host,
                                      const std::string &target) {
   boost::system::error_code error_code;
-  m_websocket.handshake(host, target, error_code);
+  m_websocket->handshake(host, target, error_code);
   if (error_code) {
     throw NetworkException("websocket_handshake error: " + error_code.message(),
                            NetErrorType::WS_HANDSHAKE_ERR);
@@ -144,6 +157,9 @@ NetError WebSocket::connect_to_server(const std::string &host, int port,
   NetError wsErr;
 
   try {
+    // Set up new websocket
+    _set_up_websocket();
+
     // DNS Resolver
     const tcp_resolve_results results = _resolve_host(host, port);
 
@@ -155,6 +171,8 @@ NetError WebSocket::connect_to_server(const std::string &host, int port,
 
     // WebSocket Handshake
     _websocket_handshake(host, target);
+
+    m_is_ws_running = true;
 
   } catch (const NetworkException &ws_exception) {
     std::cerr << "\nWebSocket Exception: " << ws_exception.what();
@@ -176,8 +194,8 @@ void WebSocket::async_write_text(const std::string msg) {
   boost::asio::post(m_io_context, [this, msg = std::move(msg)]() mutable {
     boost::system::error_code error_code; // internal ec for this method
 
-    m_websocket.text(true);
-    m_websocket.write(boost::asio::buffer(msg), error_code);
+    m_websocket->text(true);
+    m_websocket->write(boost::asio::buffer(msg), error_code);
 
     if (error_code) {
       Log::log_err("write_text error: " + error_code.message());
@@ -190,7 +208,7 @@ void WebSocket::async_write_json(const nlohmann::json json) {
 
   boost::asio::post(m_io_context, [this, json = std::move(json)]() mutable {
     boost::system::error_code error_code; // internal ec for this method
-    m_websocket.write(boost::asio::buffer(json.dump()), error_code);
+    m_websocket->write(boost::asio::buffer(json.dump()), error_code);
 
     if (error_code) {
       Log::log_err("write_json error: " + error_code.message());
@@ -198,35 +216,32 @@ void WebSocket::async_write_json(const nlohmann::json json) {
   });
 }
 
-void WebSocket::start_async_read(MessageHandler &&handler) {
+void WebSocket::start_async_read(MessageHandler &&handler,
+                                 OnErrorHandler &&errHandler) {
   _set_message_handler(std::move(handler));
+  _set_onError_handler(std::move(errHandler));
 
   _read_async();
 }
 
 void WebSocket::run_io_context() {
-  m_is_io_running.store(true);
+  if (!m_is_io_running.load()) {
+    m_is_io_running.store(true);
 
-  m_work_guard.emplace(m_io_context.get_executor());
+    m_work_guard.emplace(m_io_context.get_executor());
 
-  m_io_context_thread
-      .start([this]() {
-        // start async read
-        m_io_context.run();
-      })
-      .detach();
+    m_io_context_thread.start([this]() {
+      // start async read
+      m_io_context.run();
+    });
+  }
 }
 
 void WebSocket::stop_websocket() {
   boost::system::error_code ec;
-  m_websocket.close(websocket::close_code::normal, ec);
-  if ((ec == boost::asio::error::operation_aborted ||
-       ec == websocket::error::closed) &&
-      m_is_io_running.load()) {
-    m_work_guard.reset();
-    m_io_context.stop();
-
-    m_is_io_running.store(false);
+  m_websocket->close(websocket::close_code::normal, ec);
+  if (m_is_ws_running.load()) {
+    m_is_ws_running.store(false);
   }
 }
 

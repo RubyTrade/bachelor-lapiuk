@@ -12,8 +12,6 @@ public:
 
   NetError connect_to_websocket(const std::string &listenKey);
 
-  void disconnect_from_websocket();
-
 private:
   NetError connect_to_websocket() override;
 

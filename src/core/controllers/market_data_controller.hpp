@@ -7,6 +7,7 @@
 #include "core/utils/json.hpp"
 #include "core/utils/queue.hpp"
 #include "core/utils/thread.hpp"
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -21,6 +22,7 @@ public:
   std::vector<MarketRequest> get_list() const;
   void add_to_list(const MarketRequest &req);
   void remove_from_list(const MarketRequest &req);
+  void clear_the_list();
 
 private:
   mutable std::mutex m_mtx;
@@ -49,6 +51,8 @@ public:
   // TODO: implement easy interface to get parsed data
 
 private:
+  void _reconnect();
+
   void _start_listen_thread();
   void _start_read_thread();
 
@@ -59,6 +63,8 @@ private:
   MESSAGE_TYPE _detect_type(const JSONQuery &msg);
 
   void _fulfill_pending_result(const ResultMessage &msg);
+
+  void _resubscribe_to_list(const std::vector<MarketRequest> &list);
 
 private:
   // Main stream
@@ -81,6 +87,8 @@ private:
                      std::pair<MarketRequest, MARKET_STREAM_METHOD>>
       m_pendingReq;
   std::mutex m_pendingReqMtx;
+
+  std::atomic_bool m_is_stream_running{false};
 };
 
 } // namespace Market

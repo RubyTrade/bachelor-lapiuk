@@ -72,6 +72,8 @@ public:
   void unsubscribe_from_publisher(IUserEventListener *listener);
 
 private:
+  void _reconnect();
+
   void _start_listen_thread();
   void _start_read_thread();
 
@@ -98,6 +100,8 @@ private:
   std::unique_ptr<Queue<ParsedUserData>> m_parsedStreamData;
 
   std::unique_ptr<UserEventPublisher> m_eventPublisher;
+
+  std::atomic_bool m_is_stream_running{false};
 
 private:
   static constexpr std::chrono::minutes LISTEN_KEY_EXPIRY_TIME{30};
