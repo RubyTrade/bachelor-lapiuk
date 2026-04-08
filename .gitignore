@@ -3,6 +3,7 @@ build/*
 bin/*
 *.env
 *.pem
+.venv
 
 # Default C++ .gitignore
 # Prerequisites
