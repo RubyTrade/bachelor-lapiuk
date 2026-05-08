@@ -4,6 +4,7 @@
 #include "core/controllers/market_data_utils.hpp"
 #include "core/parsers/market_data_parser.hpp"
 #include "core/stream/market_stream.hpp"
+#include "core/utils/event_publisher.hpp"
 #include "core/utils/json.hpp"
 #include "core/utils/queue.hpp"
 #include "core/utils/thread.hpp"
@@ -48,7 +49,8 @@ public:
   bool unsubscribe_from(const MarketRequest &req);
   std::vector<MarketRequest> get_list_of_subscriptions();
 
-  // TODO: implement easy interface to get parsed data
+  void subscribe_to_publisher(IEventListener<ParsedMarketData> *listener);
+  void unsubscribe_from_publisher(IEventListener<ParsedMarketData> *listener);
 
 private:
   void _reconnect();
@@ -73,8 +75,11 @@ private:
   std::unique_ptr<MarketStreamQueryBuilder> m_queryBuilder;
 
   // Stream Market Data queues
-  std::unique_ptr<Queue<ParsedMarketData>> m_parsedStreamData;
+  std::unique_ptr<ObservableQueue<ParsedMarketData>> m_parsedStreamData;
   std::unique_ptr<MessageStreams> m_marketMsgQueues;
+
+  // Event Publisher
+  std::unique_ptr<EventPublisher<ParsedMarketData>> m_eventPublisher;
 
   // Threads
   std::unique_ptr<Thread> m_listenThread;

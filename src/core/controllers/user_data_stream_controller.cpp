@@ -1,33 +1,38 @@
 #include "user_data_stream_controller.hpp"
-#include "core/controllers/user_data_stream_utils.hpp"
+
 #include "core/parsers/common_parser_utils.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
 #include "core/stream/user_data_stream.hpp"
 #include "core/utils/constants.hpp"
 #include "core/utils/dotenv.hpp"
 #include "core/utils/helper_utils.hpp"
+#include "core/utils/json.hpp"
+#include "core/utils/log.hpp"
 #include "core/utils/queue.hpp"
-#include <execution>
+
 #include <utility>
 #include <variant>
 
 using namespace UserData;
 
-// TODO: add listenKey validity check
-
 UserDataStreamController::UserDataStreamController()
     : m_listenThread(std::make_unique<Thread>()),
       m_readThread(std::make_unique<Thread>()),
       m_userDataMsgQueues(std::make_unique<MessageStreams>()),
-      m_parsedStreamData(std::make_unique<Queue<ParsedUserData>>()),
+      m_parsedStreamData(std::make_unique<ObservableQueue<ParsedUserData>>()),
       m_http_session_manager(Net::init_http_session_manager()),
       m_key_timer(std::make_unique<AsyncTimer>()),
-      m_eventPublisher(std::make_unique<UserEventPublisher>()) {
-  // User Data Stream init
+      m_eventPublisher(std::make_unique<EventPublisher<ParsedUserData>>()) {
+
   m_userDataStream =
       std::make_unique<UserDataStream>(m_userDataMsgQueues->msgQueue);
 
   std::string listenKey = _create_listenKey();
+  if (listenKey.empty()) {
+    Log::log_err(
+        "User data: empty listenKey — check BINANCE_READ_API_KEY and POST "
+        "/fapi/v1/listenKey");
+  }
 
   m_key_timer->start_recurring(LISTEN_KEY_EXPIRY_TIME,
                                [this]() { this->_update_listenKey(); });
@@ -37,32 +42,35 @@ UserDataStreamController::UserDataStreamController()
     m_is_stream_running = true;
     _start_listen_thread();
     _start_read_thread();
+  } else {
+    Log::log_err("User data WebSocket connect failed (private/ws path)");
   }
 
   m_userDataMsgQueues->streamQueue.register_callback(
       [this](const StreamMessage &msg) {
-        // Overall, should not happen in normal flow, since
-        // we update the key every 30 minutes
         if (msg.userDataType == USER_DATA_EVENT_TYPE::LISTEN_KEY_EXPIRY) {
           _reconnect();
         } else {
-          ParsedUserData parsedMsg = UserDataStreamParser::parse(msg);
-          if (!std::holds_alternative<ErrorParse>(parsedMsg)) {
-            m_eventPublisher->publish(parsedMsg);
-          }
-
-          m_parsedStreamData->push_message(std::move(parsedMsg));
+          m_parsedStreamData->push_message(
+              std::move(UserDataStreamParser::parse(msg)));
         }
       });
-};
+
+  m_parsedStreamData->register_callback(
+      [this](const ParsedUserData &parsedMsg) {
+        if (!std::holds_alternative<ErrorParse>(parsedMsg)) {
+          m_eventPublisher->publish(parsedMsg);
+        }
+      });
+}
 
 void UserDataStreamController::subscribe_to_publisher(
-    IUserEventListener *listener) {
+    IEventListener<ParsedUserData> *listener) {
   m_eventPublisher->subscribe(listener);
 }
 
 void UserDataStreamController::unsubscribe_from_publisher(
-    IUserEventListener *listener) {
+    IEventListener<ParsedUserData> *listener) {
   m_eventPublisher->unsubscribe(listener);
 }
 
@@ -75,6 +83,7 @@ void UserDataStreamController::_reconnect() {
 
   m_readThread->stop();
   m_userDataStream->disconnect_from_websocket();
+
   std::string listenKey = _create_listenKey();
 
   m_key_timer->stop();
@@ -149,6 +158,7 @@ void UserDataStreamController::_start_listen_thread() {
         ptr->start_listening(std::move(h));
       });
 }
+
 void UserDataStreamController::_start_read_thread() {
   m_readThread->start(&UserDataStreamController::_start_buffer_reading, this);
 }
@@ -158,8 +168,7 @@ void UserDataStreamController::_start_buffer_reading() {
     std::string out_msg;
     bool res = m_userDataMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {
-      Log::log("USERDATA: " + out_msg);
-
+      Log::log_debug("USERDATA: " + out_msg);
       _parse_msg(std::move(out_msg));
     }
   }

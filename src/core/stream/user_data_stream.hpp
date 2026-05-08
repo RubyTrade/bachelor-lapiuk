@@ -5,7 +5,8 @@
 #include "core/utils/json.hpp"
 #include "stream.hpp"
 
-// User Data Stream
+/// USD-M futures user-data push stream: `wss://fstream.binance.com/private/ws/<listenKey>`
+/// (REST `POST /fapi/v1/listenKey`). `userDataStream.subscribe` is not supported on `ws-fapi/v1`.
 class UserDataStream : public Stream {
 public:
   UserDataStream(Queue<std::string> &msgQueue);

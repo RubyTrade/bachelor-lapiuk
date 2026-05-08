@@ -52,20 +52,36 @@ struct TradeRequest {
   Fixed price;
 
   // Optional fields
+  Fixed stopPrice{0};
   TIME_IN_FORCE timeInForce{TIME_IN_FORCE::GTC};
   bool reduceOnly = false;
+  bool closePosition = false;
 
 private:
   std::string clientOrderId;
+  std::string clientAlgoId;
   static int s_unique_id_counter;
+  static int s_unique_algo_id_counter;
 
 public:
+  TradeRequest()
+      : order_side(ORDER_SIDE::BUY), position_side(POSITION_SIDE::BOTH),
+        order_type(ORDER_TYPE::MARKET), symbol({}), quantity(Fixed{0}),
+        price(Fixed{0}) {
+    clientOrderId = "";
+    clientAlgoId = "";
+  }
+
   TradeRequest(ORDER_SIDE o_side, POSITION_SIDE p_side, ORDER_TYPE o_type,
-               const std::string &s, const Fixed &qty, const Fixed &p = {0})
+               const std::string &s, const Fixed &qty = {0},
+               const Fixed &p = {0})
       : order_side(o_side), position_side(p_side), order_type(o_type),
         symbol(s), quantity(qty), price(p) {
     _generateClientOrderId();
+    _generateClientAlgoId();
   }
+
+  bool isValid() const { return !clientOrderId.empty(); }
 
   // TODO: decide if needed
   void setOrderSide(ORDER_SIDE side) { order_side = side; };
@@ -74,11 +90,14 @@ public:
   void setOrderSide(std::string s) { symbol = s; };
   void setQuantity(const Fixed &q) { quantity = q; };
   void setPrice(const Fixed &p) { price = p; }
+  void setStopPrice(const Fixed &p) { stopPrice = p; }
 
   void setTimeInForce(TIME_IN_FORCE tif) { timeInForce = tif; }
   void setReduceOnly(bool reduce) { reduceOnly = true; }
+  void setClosePosition(bool close) { closePosition = true; }
 
   std::string getClientOrderId() const { return clientOrderId; }
+  std::string getClientAlgoId() const { return clientAlgoId; }
 
   void _generateClientOrderId() {
     auto now = std::chrono::system_clock::now();
@@ -89,6 +108,18 @@ public:
         symbol + "_" + type_to_str(POSITION_SIDE_STR, position_side) + "_" +
         std::to_string(now_ms) + "_" + type_to_str(ORDER_SIDE_STR, order_side) +
         "_" + std::to_string(++s_unique_id_counter);
+  }
+
+  /// Binance `clientAlgoId`: max 36 chars, ^[\.A-Z\:/a-z0-9_-]{1,36}$
+  void _generateClientAlgoId() {
+    auto now = std::chrono::system_clock::now();
+    uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          now.time_since_epoch())
+                          .count();
+    clientAlgoId = "a" + std::to_string(now_ms % 10000000000ULL) + "x" +
+                   std::to_string(++s_unique_algo_id_counter % 100000);
+    if (clientAlgoId.size() > 36)
+      clientAlgoId.resize(36);
   }
 
   bool operator==(const TradeRequest &other) const {

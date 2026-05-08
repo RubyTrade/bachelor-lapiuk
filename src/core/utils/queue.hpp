@@ -2,7 +2,6 @@
 #define QUEUE_HPP
 
 #include <atomic>
-#include <boost/asio/execution/start.hpp>
 #include <condition_variable>
 #include <functional>
 #include <memory>

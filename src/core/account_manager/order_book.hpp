@@ -7,9 +7,11 @@
 #include "core/utils/fixed_num.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <unordered_map>
 
 struct OrderEntry {
@@ -67,7 +69,7 @@ private:
   std::mutex m_ordersMutex;
 };
 
-class OrderBook : public UserData::IUserEventListener {
+class OrderBook : public IEventListener<UserData::ParsedUserData> {
 public:
   OrderBook();
   ~OrderBook();
@@ -81,6 +83,9 @@ public:
 
   uint64_t getLastUpdateTime() const { return m_lastUpdateTime; }
 
+  // temp
+  void register_update_callback(std::function<void()> cb) { m_update_cb = cb; }
+
 private:
   void _runProcessingThread();
   void _listenToUpdates();
@@ -93,6 +98,11 @@ private:
   void
   _updateOrCreateOrderTradeUpdate(const UserData::OrderTradeUpdateEvent &event);
 
+  std::string _formatFilledTradeLog(const OrderEntry &entry) const;
+  void _logFilledTrade(const OrderEntry &entry) const;
+  std::string _formatAlgoUpdateLog(const OrderEntry &entry) const;
+  void _logAlgoUpdate(const OrderEntry &entry) const;
+
 private:
   std::unique_ptr<AccountOrders> m_orders;
 
@@ -100,6 +110,8 @@ private:
   std::atomic_bool m_isQueueActive{false};
 
   std::unique_ptr<Thread> m_processingThread;
+
+  std::function<void()> m_update_cb = nullptr;
 
   uint64_t m_lastUpdateTime;
 };

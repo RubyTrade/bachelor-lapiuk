@@ -28,7 +28,9 @@ public:
   TradingStreamController();
 
   std::string create_order(const TradeRequest &req);
+  std::string create_algo_order(const TradeRequest &req);
   bool cancel_order(const TradeRequest &req);
+  bool cancel_algo_order(const TradeRequest &req);
   bool get_order_status(const TradeRequest &req);
 
   // TODO: support more requests

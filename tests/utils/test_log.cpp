@@ -10,9 +10,7 @@ struct CoutCapture {
   std::streambuf *old = nullptr;
   std::ostringstream oss;
 
-  void start() {
-    old = std::cout.rdbuf(oss.rdbuf());
-  }
+  void start() { old = std::cout.rdbuf(oss.rdbuf()); }
 
   std::string stop() {
     std::cout.rdbuf(old);
@@ -24,7 +22,7 @@ struct CoutCapture {
 TEST(Log, WritesToStdoutWithNewlineByDefault) {
   CoutCapture cap;
   cap.start();
-  Log::log("hello");
+  Log::log_debug("hello");
   const std::string out = cap.stop();
   EXPECT_EQ(out, std::string("hello\n"));
 }
@@ -32,7 +30,7 @@ TEST(Log, WritesToStdoutWithNewlineByDefault) {
 TEST(Log, WritesWithoutNewlineWhenDisabled) {
   CoutCapture cap;
   cap.start();
-  Log::log("hello", false);
+  Log::log_debug("hello", false);
   const std::string out = cap.stop();
   EXPECT_EQ(out, std::string("hello"));
 }
@@ -40,8 +38,8 @@ TEST(Log, WritesWithoutNewlineWhenDisabled) {
 TEST(Log, MultipleCallsWithNewlines) {
   CoutCapture cap;
   cap.start();
-  Log::log("first");
-  Log::log("second");
+  Log::log_debug("first");
+  Log::log_debug("second");
   const std::string out = cap.stop();
   EXPECT_EQ(out, "first\nsecond\n");
 }
@@ -49,7 +47,7 @@ TEST(Log, MultipleCallsWithNewlines) {
 TEST(Log, EmptyStringWithNewline) {
   CoutCapture cap;
   cap.start();
-  Log::log("");
+  Log::log_debug("");
   const std::string out = cap.stop();
   EXPECT_EQ(out, "\n");
 }
@@ -58,7 +56,7 @@ TEST(Log, LongMessage) {
   CoutCapture cap;
   std::string longMsg(1000, 'x');
   cap.start();
-  Log::log(longMsg);
+  Log::log_debug(longMsg);
   const std::string out = cap.stop();
   EXPECT_EQ(out, longMsg + "\n");
 }

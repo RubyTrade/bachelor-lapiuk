@@ -23,9 +23,13 @@ public:
   ParametersBuilder &add_type(const ORDER_TYPE &type);
   ParametersBuilder &add_clientOrderId(const std::string &clientOrderId);
   ParametersBuilder &add_reduceOnly(bool reduceOnly);
+  ParametersBuilder &add_closePosition(bool close);
+  ParametersBuilder &add_stopPrice(const Fixed &price);
 
-  // Algo params
-  ParametersBuilder &add_algoType(const ORDER_TYPE &type);
+  // Algo params (algoOrder.place: algoType is always CONDITIONAL; order kind is `type`.)
+  ParametersBuilder &add_algo_type_conditional();
+  ParametersBuilder &add_clientAlgoId(const std::string &clientAlgoId);
+  ParametersBuilder &add_algoId(int64_t algoId);
   ParametersBuilder &add_newOrderRespType(const std::string &type);
   ParametersBuilder &add_triggerPrice(const Fixed &price);
 

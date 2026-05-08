@@ -8,8 +8,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLEAN_FLAG=false
 RUN_FLAG=false
 DEBUG_FLAG=false
-# Args
-while getopts "crdt" opt; do
+ASAN_FLAG=false
+TSAN_FLAG=false
+
+# Args: c=clean, r=run app, d=debug, a=ASan+UBSan, t=TSan
+while getopts "crdat" opt; do
   case $opt in
     c) echo "=== Clean build ==="
       CLEAN_FLAG=true
@@ -20,7 +23,7 @@ while getopts "crdt" opt; do
     a) echo "=== ASan + UBSan ==="
       ASAN_FLAG=true
       ;;
-    d) echo "=== Debug build==="
+    d) echo "=== Debug build ==="
       DEBUG_FLAG=true
       ;;
     t) echo "=== Thread sanitizer build ==="
@@ -30,20 +33,21 @@ while getopts "crdt" opt; do
   esac
 done
 
-
-build ()
-{
+build() {
   if [[ $CLEAN_FLAG == "true" ]]; then
-    rm -rf $SCRIPT_DIR/build/
-  fi  
+    rm -rf "${SCRIPT_DIR}/build/"
+  fi
 
-  mkdir -p $SCRIPT_DIR/build
-  mkdir -p $SCRIPT_DIR/bin
+  mkdir -p "${SCRIPT_DIR}/build"
+  mkdir -p "${SCRIPT_DIR}/bin"
 
   echo "=== Starting CMake build ==="
-  cd $SCRIPT_DIR/build
-   
-  CMAKE_ARGS=()
+  cd "${SCRIPT_DIR}/build"
+
+  CMAKE_ARGS=(
+    # Main app + core + strategy: do not pull in gtest / test targets
+    -DTRADINGBOT_BUILD_TESTS=OFF
+  )
 
   # --- Build type
   if [[ $DEBUG_FLAG == "true" || $TSAN_FLAG == "true" ]]; then
@@ -52,7 +56,7 @@ build ()
     CMAKE_ARGS+=(-DCMAKE_BUILD_TYPE=Release)
   fi
 
-  # --- Sanitizers
+  # --- Sanitizers (apply to all targets via global flags; exe link completes ASan/TSan)
   if [[ $ASAN_FLAG == "true" ]]; then
     echo "=== Using ASan + UBSan ==="
     CMAKE_ARGS+=(
@@ -71,29 +75,34 @@ build ()
 
   cmake .. "${CMAKE_ARGS[@]}"
 
-  make
+  if command -v nproc >/dev/null 2>&1; then
+    JOBS="$(nproc)"
+  else
+    JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+  fi
+  cmake --build . --parallel "${JOBS}"
 
   echo "=== Finished CMake build ==="
 }
 
-
-run ()
-{
+run() {
   echo "=== Bot is started ==="
-  cd $SCRIPT_DIR
+  cd "${SCRIPT_DIR}"
+
+  BOT_BIN="${SCRIPT_DIR}/bin/TradingBot"
+  if [[ ! -x "$BOT_BIN" ]]; then
+    echo "Error: executable not found or not executable: $BOT_BIN" >&2
+    exit 1
+  fi
 
   # first argument is absolute path to .env,
-  # to eliminate searching the relative path to it in app
   # second argument is absolute path to binance PK
-  ./bin/TradingBot "${SCRIPT_DIR}/.env" "${SCRIPT_DIR}/binance_private.pem"
+  "$BOT_BIN" "${SCRIPT_DIR}/.env" "${SCRIPT_DIR}/binance_private.pem"
   echo "=== Bot is stopped ==="
 }
 
-
-# Build the project using CMake
 build
 
-# Run the project (Optional)
 if [[ $RUN_FLAG == "true" ]]; then
   run
 fi

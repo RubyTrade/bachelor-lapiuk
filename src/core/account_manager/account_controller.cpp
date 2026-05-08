@@ -60,6 +60,15 @@ const std::set<std::string> &AccountBalance::getBalancesList() const {
   return m_balancesList;
 }
 
+std::optional<Fixed>
+AccountBalance::getWalletBalance(const std::string &assetName) const {
+  std::lock_guard<std::mutex> lock(m_balanceMutex);
+  auto it = m_balance.find(assetName);
+  if (it == m_balance.end())
+    return std::nullopt;
+  return it->second.walletBalance;
+}
+
 const std::set<std::string> &AccountPositions::getPositionsList() const {
   return m_positionsList;
 }
@@ -70,6 +79,11 @@ const std::set<std::string> &AccountController::getBalancesList() const {
 
 const std::set<std::string> &AccountController::getPositionsList() const {
   return m_positions->getPositionsList();
+}
+
+std::optional<Fixed>
+AccountController::getAssetWalletBalance(const std::string &asset) const {
+  return m_balance->getWalletBalance(asset);
 }
 
 void AccountConfig::updateLeverage(const std::string &symbol,

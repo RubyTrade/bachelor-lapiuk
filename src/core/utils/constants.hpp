@@ -47,7 +47,9 @@ enum class USER_DATA_EVENT_TYPE {
   MARGIN_CALL,
   ORDER_TRADE_UPDATE,
   TRADE_LITE,
-  ACCOUNT_CONFIG_UPDATE
+  ACCOUNT_CONFIG_UPDATE,
+  /// Algo Service conditional order lifecycle (do not mis-map to LISTEN_KEY_EXPIRY).
+  ALGO_UPDATE,
 };
 
 enum class EXECUTION_TYPE { NEW, CANCELED, CALCULATED, EXPIRED, TRADE };
@@ -70,7 +72,32 @@ enum class SELF_TRADE_PREVENTION_MODE {
   EXPIRE_BOTH
 };
 
-static constexpr std::array<EnumStringPair<USER_DATA_EVENT_TYPE>, 6>
+enum class SIGNAL { HOLD, LONG_ENTRY, SHORT_ENTRY, CLOSE_LONG, CLOSE_SHORT };
+
+enum class STRATEGIES { UNKNOWN, MEAN_REVERSION };
+
+enum class ORDER_SIDE_TYPE { LONG, SHORT };
+
+static constexpr std::array<EnumStringPair<ORDER_SIDE_TYPE>, 2>
+    ORDER_SIDE_TYPE_STR{{
+        {ORDER_SIDE_TYPE::LONG, "LONG"},
+        {ORDER_SIDE_TYPE::SHORT, "SHORT"},
+    }};
+
+static constexpr std::array<EnumStringPair<STRATEGIES>, 2> STRATEGIES_STR{{
+    {STRATEGIES::UNKNOWN, "UNKNOWN"},
+    {STRATEGIES::MEAN_REVERSION, "MEAN_REVERSION"},
+}};
+
+static constexpr std::array<EnumStringPair<SIGNAL>, 5> SIGNAL_STR{{
+    {SIGNAL::HOLD, "HOLD"},
+    {SIGNAL::LONG_ENTRY, "LONG_ENTRY"},
+    {SIGNAL::SHORT_ENTRY, "SHORT_ENTRY"},
+    {SIGNAL::CLOSE_LONG, "CLOSE_LONG"},
+    {SIGNAL::CLOSE_SHORT, "CLOSE_SHORT"},
+}};
+
+static constexpr std::array<EnumStringPair<USER_DATA_EVENT_TYPE>, 7>
     USER_DATA_EVENT_TYPE_STR{{
         {USER_DATA_EVENT_TYPE::LISTEN_KEY_EXPIRY, "listenKeyExpired"},
         {USER_DATA_EVENT_TYPE::ACCOUNT_UPDATE, "ACCOUNT_UPDATE"},
@@ -78,6 +105,7 @@ static constexpr std::array<EnumStringPair<USER_DATA_EVENT_TYPE>, 6>
         {USER_DATA_EVENT_TYPE::ORDER_TRADE_UPDATE, "ORDER_TRADE_UPDATE"},
         {USER_DATA_EVENT_TYPE::TRADE_LITE, "TRADE_LITE"},
         {USER_DATA_EVENT_TYPE::ACCOUNT_CONFIG_UPDATE, "ACCOUNT_CONFIG_UPDATE"},
+        {USER_DATA_EVENT_TYPE::ALGO_UPDATE, "ALGO_UPDATE"},
     }};
 
 static constexpr std::array<EnumStringPair<SELF_TRADE_PREVENTION_MODE>, 4>
@@ -165,7 +193,8 @@ inline static constexpr std::string_view BINANCE_READ_REST_SECRET_KEY_ENV =
 inline constexpr std::string_view WS_HOST = "fstream.binance.com";
 inline constexpr std::string_view WS_TRADING_HOST = "ws-fapi.binance.com";
 inline constexpr std::string_view WS_DEFAULT_TARGET = "/stream";
-inline constexpr std::string_view WS_USERDATA_TARGET = "/ws";
+/// USD-M user data stream path (requires REST listenKey). Docs: fstream + `/private/ws/<listenKey>`.
+inline constexpr std::string_view WS_USERDATA_TARGET = "/private/ws";
 inline constexpr std::string_view WS_TRADING_API_TARGET = "/ws-fapi/v1";
 
 inline constexpr std::string_view API_HOST = "fapi.binance.com";
