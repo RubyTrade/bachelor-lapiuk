@@ -32,10 +32,14 @@
 #include "core/utils/constants.hpp"
 #include "core/utils/dotenv.hpp"
 #include "core/utils/fixed_num.hpp"
+#include "core/utils/helper_utils.hpp"
 #include "core/utils/json.hpp"
 #include "core/utils/log.hpp"
 #include "core/utils/thread.hpp"
 #include "core/utils/time.hpp"
+#include "strategy/strategies/data_dispatcher.hpp"
+#include "strategy/strategies/mean_reversion.hpp"
+#include "strategy/strategies/strategy_manager.hpp"
 
 int main(int argc, char *argv[]) {
   std::string dotenv_path = ".env";
@@ -52,6 +56,7 @@ int main(int argc, char *argv[]) {
   }
 
   Env::getInstance().setenv("BINANCE_PRIVATE_KEY", oss.str());
+  Log::set_log_file_from_env();
 
   /*
   std::unique_ptr<AccountRestApi::AccountRestApiController> controller =
@@ -60,7 +65,7 @@ int main(int argc, char *argv[]) {
   controller->register_parsed_data_callback(
       [&](const AccountRestApi::ParsedAccountRestApi &data) {
         if (!std::holds_alternative<ErrorParse>(data)) {
-          Log::log("success");
+          Log::log_debug("success");
         }
         return;
       });
@@ -69,18 +74,15 @@ int main(int argc, char *argv[]) {
   controller->request_account_balance();
   controller->request_commission_rate("BTCUSDT");
 */
-  /*
   // MarketStream test
   std::unique_ptr<Market::MarketDataController> market_controller =
       std::make_unique<Market::MarketDataController>();
 
-  Market::MarketRequest req1{"btcusdt", MARKET_DATA_TYPE::AGG_TRADE};
+  Market::MarketRequest req1{"solusdt", MARKET_DATA_TYPE::AGG_TRADE};
   market_controller->subscribe_to(req1);
 
   std::this_thread::sleep_for(std::chrono::seconds(2));
 
-  */
-  /*
   // UserDataStream test
   std::unique_ptr<UserData::UserDataStreamController> userdata_controller =
       std::make_unique<UserData::UserDataStreamController>();
@@ -92,47 +94,42 @@ int main(int argc, char *argv[]) {
 
   userdata_controller->subscribe_to_publisher(order_book.get());
   userdata_controller->subscribe_to_publisher(account_controller.get());
-  */
-  /*
   // TradingStream test
   std::unique_ptr<Trading::TradingStreamController> trading_controller =
       std::make_unique<Trading::TradingStreamController>();
 
-  Trading::TradeRequest req(ORDER_SIDE::BUY, POSITION_SIDE::BOTH,
-                            ORDER_TYPE::MARKET, "SOLUSDT",
-                            Fixed::str_to_fixed("0.10"));
+  // Strategy test
+  std::unique_ptr<StrategyManager> strat_manager =
+      std::make_unique<StrategyManager>(
+          trading_controller.get(), order_book.get(), account_controller.get());
 
-  trading_controller->create_order(req);
-  std::this_thread::sleep_for(std::chrono::seconds(2));
-  trading_controller->get_order_status(req);
+  market_controller->subscribe_to_publisher(
+      strat_manager->getMarketDispatcher());
 
-  std::this_thread::sleep_for(std::chrono::seconds(3));
+  StrategyInfo mean_info =
+      strat_manager->create_strategy(STRATEGIES::MEAN_REVERSION);
 
-  Trading::TradeRequest req2(ORDER_SIDE::SELL, POSITION_SIDE::BOTH,
-                             ORDER_TYPE::MARKET, "SOLUSDT",
-                             Fixed::str_to_fixed("0.10"));
-
-  req2.setReduceOnly(true);
-  trading_controller->create_order(req2);
-
-  std::optional<OrderEntry> order =
-      order_book->getOrderByClientId(req.getClientOrderId());
-
-  std::this_thread::sleep_for(std::chrono::seconds(2));
-
-  for (auto &asset : account_controller->getBalancesList()) {
-    Log::log("Asset: " + asset);
+  SIGNAL signal = SIGNAL::LONG_ENTRY;
+  if (signal != SIGNAL::HOLD) {
+    Log::log_info("\nSignal of " + mean_info.strategy_str + " | " +
+                  type_to_str(SIGNAL_STR, signal));
+    strat_manager->process_signal(mean_info, signal);
   }
 
-  for (auto &pos : account_controller->getPositionsList()) {
-    Log::log("Position: " + pos);
+  std::this_thread::sleep_for(std::chrono::seconds(5));
+
+  // strat_manager->run_loop(mean_info);
+
+  /*
+  std::this_thread::sleep_for(std::chrono::seconds(15));
+  signal = SIGNAL::CLOSE_LONG;
+  if (signal != SIGNAL::HOLD) {
+    Log::log_info("\nSignal of " + mean_info.strategy_str + " | " +
+                  type_to_str(SIGNAL_STR, signal));
+    strat_manager->process_signal(mean_info, signal);
   }
+  */
 
-  std::optional<OrderEntry> order2 =
-      order_book->getOrderByClientId(req2.getClientOrderId());
-
-  Log::log("order2: " + order2->symbol);
-*/
   /*
   std::optional<JSONQuery> balance_info =
       TradingStreamQueryBuilder(USER_DATA_STREAM_METHOD::ACCOUNT_BALANCE)
@@ -162,7 +159,7 @@ int main(int argc, char *argv[]) {
   if (sub_query) {
     std::ostringstream ss;
     ss << "\nQuery: " << sub_query.value().str();
-    Log::log(ss.str());
+    Log::log_debug(ss.str());
 
     stream->execute_query(sub_query.value());
   }
@@ -174,7 +171,7 @@ int main(int argc, char *argv[]) {
   if (test_order) {
     std::ostringstream ss;
     ss << "\nQuery: " << test_order.value().str();
-    Log::log(ss.str());
+    Log::log_debug(ss.str());
 
     stream->execute_query(test_order.value());
   }
@@ -193,8 +190,8 @@ int main(int argc, char *argv[]) {
 
   std::ostringstream ss;
   ss << "\nHttp response: " << buffer;
-  Log::log(ss.str());
-*/
+  Log::log_debug(ss.str());
+  */
   /*
   AsyncTimer timer;
   std::condition_variable cv;
@@ -204,8 +201,8 @@ int main(int argc, char *argv[]) {
   timer.start(std::chrono::seconds(10), cv, mtx, flag);
 
   cv.wait(lock, [&flag] { return flag; });
-  Log::log("funny thing");
-  timer.start(std::chrono::seconds(5), []() { Log::log("Testing"); });
+  Log::log_debug("funny thing");
+  timer.start(std::chrono::seconds(5), []() { Log::log_debug("Testing"); });
   */
 
   std::cin.get();

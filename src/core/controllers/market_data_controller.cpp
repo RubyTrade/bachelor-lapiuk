@@ -21,10 +21,11 @@ using namespace Market;
 MarketDataController::MarketDataController()
     : m_queryBuilder(std::make_unique<MarketStreamQueryBuilder>(
           MARKET_STREAM_METHOD::SUBSCRIBE)),
-      m_parsedStreamData(std::make_unique<Queue<ParsedMarketData>>()),
+      m_parsedStreamData(std::make_unique<ObservableQueue<ParsedMarketData>>()),
       m_listenThread(std::make_unique<Thread>()),
       m_readThread(std::make_unique<Thread>()),
-      m_marketMsgQueues(std::make_unique<MessageStreams>()) {
+      m_marketMsgQueues(std::make_unique<MessageStreams>()),
+      m_eventPublisher(std::make_unique<EventPublisher<ParsedMarketData>>()) {
   // Market Stream init
   m_marketStream = std::make_unique<MarketStream>(m_marketMsgQueues->msgQueue);
 
@@ -40,7 +41,15 @@ MarketDataController::MarketDataController()
 
   m_marketMsgQueues->streamQueue.register_callback(
       [this](const StreamMessage &msg) {
-        m_parsedStreamData->push_message(MarketDataParser::parse(msg));
+        m_parsedStreamData->push_message(
+            std::move(MarketDataParser::parse(msg)));
+      });
+
+  m_parsedStreamData->register_callback(
+      [this](const ParsedMarketData &parsedMsg) {
+        if (!std::holds_alternative<ErrorParse>(parsedMsg)) {
+          m_eventPublisher->publish(parsedMsg);
+        }
       });
 };
 
@@ -67,6 +76,16 @@ void MarketDataController::_reconnect() {
 
   // Automatically resubscribe to symbols
   _resubscribe_to_list(current_list);
+}
+
+void MarketDataController::subscribe_to_publisher(
+    IEventListener<ParsedMarketData> *listener) {
+  m_eventPublisher->subscribe(listener);
+}
+
+void MarketDataController::unsubscribe_from_publisher(
+    IEventListener<ParsedMarketData> *listener) {
+  m_eventPublisher->unsubscribe(listener);
 }
 
 std::vector<MarketRequest> SubscriptionsList::get_list() const {
@@ -223,7 +242,7 @@ void MarketDataController::_start_buffer_reading() {
     std::string out_msg;
     bool res = m_marketMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {
-      Log::log("MARKETDATA" + out_msg);
+      Log::log_debug("MARKETDATA" + out_msg);
 
       _parse_msg(std::move(out_msg));
     }

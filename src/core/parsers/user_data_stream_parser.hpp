@@ -323,6 +323,44 @@ private:
   static constexpr std::string_view TRANSACTION_TIME = "T";
 };
 
+class AlgoUpdateParser {
+public:
+  static ParsedUserData parse(const StreamMessage &msg);
+
+private:
+  static constexpr std::string_view ORDER = "o";
+
+  static constexpr std::string_view CLIENT_ALGO_ID = "caid";
+  static constexpr std::string_view ALGO_ID = "aid";
+  static constexpr std::string_view MATCH_ORDER_ID = "ai";
+  static constexpr std::string_view SYMBOL = "s";
+  static constexpr std::string_view SIDE = "S";
+  static constexpr std::string_view POSITION_SIDE = "ps";
+  static constexpr std::string_view ORDER_TYPE = "o";
+  static constexpr std::string_view TIME_IN_FORCE = "f";
+  static constexpr std::string_view ALGO_STATUS = "X";
+
+  static constexpr std::string_view ORIG_QTY = "q";
+  static constexpr std::string_view EXECUTED_QTY = "aq";
+  static constexpr std::string_view AVG_PRICE = "ap";
+  static constexpr std::string_view PRICE = "p";
+  static constexpr std::string_view TRIGGER_PRICE = "tp";
+
+  static constexpr std::string_view REDUCE_ONLY = "R";
+  static constexpr std::string_view CLOSE_POSITION = "cp";
+  static constexpr std::string_view PRICE_PROTECT = "pP";
+
+  static constexpr std::string_view WORKING_TYPE = "wt";
+  static constexpr std::string_view PRICE_MATCH = "pm";
+  static constexpr std::string_view STP_MODE = "V";
+
+  static constexpr std::string_view GOOD_TILL_DATE = "gtd";
+  static constexpr std::string_view TRIGGER_TIME = "tt";
+
+  static constexpr std::string_view EVENT_TIME = "E";
+  static constexpr std::string_view TRANSACTION_TIME = "T";
+};
+
 // Main Parser
 class UserDataStreamParser {
 public:

@@ -5,62 +5,18 @@
 #include "core/net/net.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
 #include "core/stream/user_data_stream.hpp"
+#include "core/utils/event_publisher.hpp"
 #include "core/utils/queue.hpp"
 #include "core/utils/time.hpp"
 
+#include <atomic>
 #include <memory>
-#include <pstl/glue_algorithm_defs.h>
 #include <string>
-#include <vector>
 
 namespace UserData {
 
-class IUserEventListener {
-public:
-  virtual ~IUserEventListener() = default;
-  virtual void enqueue(ParsedUserData event) = 0;
-  virtual void start() = 0;
-  virtual void stop() = 0;
-};
-
-class UserEventPublisher {
-public:
-  void subscribe(IUserEventListener *listener) {
-    if (!listener)
-      return;
-
-    if (std::find(m_listeners.begin(), m_listeners.end(), listener) ==
-        m_listeners.end()) {
-      m_listeners.push_back(listener);
-      listener->start();
-    }
-  }
-
-  void unsubscribe(IUserEventListener *listener) {
-    m_listeners.erase(
-        std::remove(m_listeners.begin(), m_listeners.end(), listener),
-        m_listeners.end());
-    listener->stop();
-  }
-
-  void publish(const ParsedUserData &event) {
-    auto listenersCopy = m_listeners;
-
-    for (auto *listener : listenersCopy) {
-      if (listener)
-        listener->enqueue(event);
-    }
-  }
-
-private:
-  std::vector<IUserEventListener *> m_listeners;
-};
-
 struct MessageStreams {
-  // Main string message queue
   Queue<std::string> msgQueue;
-
-  // Queue for parsed messages
   ObservableQueue<StreamMessage> streamQueue;
 };
 
@@ -68,8 +24,8 @@ class UserDataStreamController {
 public:
   UserDataStreamController();
 
-  void subscribe_to_publisher(IUserEventListener *listener);
-  void unsubscribe_from_publisher(IUserEventListener *listener);
+  void subscribe_to_publisher(IEventListener<ParsedUserData> *listener);
+  void unsubscribe_from_publisher(IEventListener<ParsedUserData> *listener);
 
 private:
   void _reconnect();
@@ -79,31 +35,24 @@ private:
 
   void _start_buffer_reading();
 
-  NetError _do_session_logon();
-
   void _parse_msg(const std::string &&msg);
 
-private:
   std::string _create_listenKey();
   void _update_listenKey();
 
 private:
-  // Main stream
   std::unique_ptr<UserDataStream> m_userDataStream;
 
-  // Threads
   std::unique_ptr<Thread> m_listenThread;
   std::unique_ptr<Thread> m_readThread;
 
-  // Main string message queue
   std::unique_ptr<MessageStreams> m_userDataMsgQueues;
-  std::unique_ptr<Queue<ParsedUserData>> m_parsedStreamData;
+  std::unique_ptr<ObservableQueue<ParsedUserData>> m_parsedStreamData;
 
-  std::unique_ptr<UserEventPublisher> m_eventPublisher;
+  std::unique_ptr<EventPublisher<ParsedUserData>> m_eventPublisher;
 
   std::atomic_bool m_is_stream_running{false};
 
-private:
   static constexpr std::chrono::minutes LISTEN_KEY_EXPIRY_TIME{30};
   static constexpr std::string_view LISTEN_KEY_STR{"listenKey"};
 

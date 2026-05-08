@@ -71,6 +71,8 @@ public:
 
   const std::set<std::string> &getBalancesList() const;
 
+  std::optional<Fixed> getWalletBalance(const std::string &assetName) const;
+
 private:
   void addToSet(const std::string &asset);
   void removeFromSet(const std::string &asset);
@@ -79,7 +81,7 @@ private:
   std::set<std::string> m_balancesList;
   // key - assetName
   std::unordered_map<std::string, BalanceAsset> m_balance;
-  std::mutex m_balanceMutex;
+  mutable std::mutex m_balanceMutex;
   std::mutex m_balanceListMutex;
 };
 
@@ -114,7 +116,8 @@ public:
   bool getMultiAssetMode() const;
 
   // Symbol configuration
-  void updateSymbolConfig(const std::string &symbol, const SymbolConfig &config);
+  void updateSymbolConfig(const std::string &symbol,
+                          const SymbolConfig &config);
   void setMarginType(const std::string &symbol, MARGIN_TYPE marginType);
   std::optional<SymbolConfig> getSymbolConfig(const std::string &symbol) const;
   MARGIN_TYPE getMarginType(const std::string &symbol) const;
@@ -129,7 +132,8 @@ public:
   RiskManagementConfig getRiskConfig() const;
 
   // Commission rates
-  void updateCommissionRate(const std::string &symbol, Fixed maker, Fixed taker);
+  void updateCommissionRate(const std::string &symbol, Fixed maker,
+                            Fixed taker);
   std::pair<Fixed, Fixed> getCommissionRate(const std::string &symbol) const;
 
   // Active symbols
@@ -151,7 +155,7 @@ private:
   mutable std::mutex m_configMutex;
 };
 
-class AccountController : public UserData::IUserEventListener {
+class AccountController : public IEventListener<UserData::ParsedUserData> {
 public:
   AccountController();
   ~AccountController();
@@ -161,12 +165,16 @@ public:
   const std::set<std::string> &getBalancesList() const;
   const std::set<std::string> &getPositionsList() const;
 
+  /// Wallet balance for margin asset (e.g. "USDT") if known from stream/REST.
+  std::optional<Fixed> getAssetWalletBalance(const std::string &asset) const;
+
   // REST API response processing
-  void processRestApiResponse(const AccountRestApi::ParsedAccountRestApi &response);
+  void
+  processRestApiResponse(const AccountRestApi::ParsedAccountRestApi &response);
 
   // Access to sub-components
-  const AccountConfig& getConfig() const { return *m_config; }
-  AccountConfig& getConfig() { return *m_config; }
+  const AccountConfig &getConfig() const { return *m_config; }
+  AccountConfig &getConfig() { return *m_config; }
 
   // UserEventListener interface
   void enqueue(UserData::ParsedUserData event) override;

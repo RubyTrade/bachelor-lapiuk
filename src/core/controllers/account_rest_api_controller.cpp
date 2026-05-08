@@ -109,7 +109,7 @@ bool AccountRestApiController::_make_signed_request(const std::string &endpoint,
     return false;
   }
 
-  Log::log("REST_API: " + buffer);
+  Log::log_debug("REST_API: " + buffer);
 
   // Parse the response
   JSONQuery jsonResponse(buffer);

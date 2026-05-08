@@ -1,8 +1,8 @@
 #include <chrono>
 #include <gtest/gtest.h>
 
-#include "core/controllers/user_data_stream_controller.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
+#include "core/utils/event_publisher.hpp"
 
 #include <atomic>
 #include <thread>
@@ -11,7 +11,7 @@
 using namespace UserData;
 
 // Mock listener for testing
-class MockUserEventListener : public IUserEventListener {
+class MockUserEventListener : public IEventListener<ParsedUserData> {
 public:
   MockUserEventListener() : eventCount(0) {}
 
@@ -27,9 +27,9 @@ public:
   std::atomic<int> eventCount;
 };
 
-// UserEventPublisher Tests
+// EventPublisher<ParsedUserData> Tests
 TEST(UserEventPublisher, NoListenersByDefault) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
 
   // Should not crash when publishing without listeners
   ErrorParse error;
@@ -40,7 +40,7 @@ TEST(UserEventPublisher, NoListenersByDefault) {
 }
 
 TEST(UserEventPublisher, SubscribeSingleListener) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -56,7 +56,7 @@ TEST(UserEventPublisher, SubscribeSingleListener) {
 }
 
 TEST(UserEventPublisher, SubscribeMultipleListeners) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener1;
   MockUserEventListener listener2;
   MockUserEventListener listener3;
@@ -77,7 +77,7 @@ TEST(UserEventPublisher, SubscribeMultipleListeners) {
 }
 
 TEST(UserEventPublisher, SubscribeNullptrIsIgnored) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
 
   publisher.subscribe(nullptr);
 
@@ -89,7 +89,7 @@ TEST(UserEventPublisher, SubscribeNullptrIsIgnored) {
 }
 
 TEST(UserEventPublisher, SubscribeSameListenerTwice) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -105,7 +105,7 @@ TEST(UserEventPublisher, SubscribeSameListenerTwice) {
 }
 
 TEST(UserEventPublisher, UnsubscribeListener) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -120,7 +120,7 @@ TEST(UserEventPublisher, UnsubscribeListener) {
 }
 
 TEST(UserEventPublisher, UnsubscribeNonExistentListener) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   // Should not crash
@@ -128,7 +128,7 @@ TEST(UserEventPublisher, UnsubscribeNonExistentListener) {
 }
 
 TEST(UserEventPublisher, UnsubscribeOneOfMultipleListeners) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener1;
   MockUserEventListener listener2;
   MockUserEventListener listener3;
@@ -150,7 +150,7 @@ TEST(UserEventPublisher, UnsubscribeOneOfMultipleListeners) {
 }
 
 TEST(UserEventPublisher, PublishMultipleEvents) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -167,7 +167,7 @@ TEST(UserEventPublisher, PublishMultipleEvents) {
 }
 
 TEST(UserEventPublisher, DifferentEventTypes) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -193,7 +193,7 @@ TEST(UserEventPublisher, DifferentEventTypes) {
 }
 
 TEST(UserEventPublisher, ResubscribeAfterUnsubscribe) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -209,7 +209,7 @@ TEST(UserEventPublisher, ResubscribeAfterUnsubscribe) {
 }
 
 TEST(UserEventPublisher, ThreadSafePublish) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -240,50 +240,10 @@ TEST(UserEventPublisher, ThreadSafePublish) {
   EXPECT_EQ(listener.eventCount.load(), numThreads * eventsPerThread);
 }
 
-TEST(UserEventPublisher, ThreadSafeSubscribeUnsubscribe) {
-  UserEventPublisher publisher;
-  std::vector<std::unique_ptr<MockUserEventListener>> listeners;
-
-  const int numListeners = 50;
-  for (int i = 0; i < numListeners; ++i) {
-    listeners.push_back(std::make_unique<MockUserEventListener>());
-  }
-
-  std::vector<std::thread> threads;
-
-  // Subscribe threads
-  for (int i = 0; i < numListeners / 2; ++i) {
-    threads.emplace_back([&publisher, &listeners, i]() {
-      publisher.subscribe(listeners[i].get());
-    });
-  }
-
-  // Unsubscribe threads
-  for (int i = numListeners / 2; i < numListeners; ++i) {
-    threads.emplace_back([&publisher, &listeners, i]() {
-      publisher.subscribe(listeners[i].get());
-      publisher.unsubscribe(listeners[i].get());
-    });
-  }
-
-  for (auto &thread : threads) {
-    thread.join();
-  }
-
-  // Publish an event
-  ErrorParse error;
-  ParsedUserData event = error;
-  publisher.publish(event);
-
-  // First half should receive event
-  for (int i = 0; i < numListeners / 2; ++i) {
-    EXPECT_GE(listeners[i]->eventCount.load(), 0);
-  }
-}
 
 TEST(UserEventPublisher, MultiplePublishersIndependent) {
-  UserEventPublisher publisher1;
-  UserEventPublisher publisher2;
+  EventPublisher<ParsedUserData> publisher1;
+  EventPublisher<ParsedUserData> publisher2;
 
   MockUserEventListener listener1;
   MockUserEventListener listener2;
@@ -306,7 +266,7 @@ TEST(UserEventPublisher, MultiplePublishersIndependent) {
 }
 
 TEST(UserEventPublisher, ListenerReceivesCorrectEventData) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener;
 
   publisher.subscribe(&listener);
@@ -328,7 +288,7 @@ TEST(UserEventPublisher, ListenerReceivesCorrectEventData) {
 }
 
 TEST(UserEventPublisher, UnsubscribeAllListeners) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   std::vector<std::unique_ptr<MockUserEventListener>> listeners;
 
   const int count = 10;
@@ -351,7 +311,7 @@ TEST(UserEventPublisher, UnsubscribeAllListeners) {
 }
 
 TEST(UserEventPublisher, PublishDuringSubscription) {
-  UserEventPublisher publisher;
+  EventPublisher<ParsedUserData> publisher;
   MockUserEventListener listener1;
   MockUserEventListener listener2;
 

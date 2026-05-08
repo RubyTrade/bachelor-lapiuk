@@ -15,6 +15,7 @@
 using namespace Trading;
 
 int TradeRequest::s_unique_id_counter = 0;
+int TradeRequest::s_unique_algo_id_counter = 0;
 
 TradingStreamController::TradingStreamController()
     : m_queryBuilder(std::make_unique<TradingStreamQueryBuilder>(
@@ -113,7 +114,7 @@ void TradingStreamController::_start_buffer_reading() {
     std::string out_msg;
     bool res = m_tradingMsgQueues->msgQueue.pop_message(out_msg);
     if (res) {
-      Log::log("TRADINGDATA: " + out_msg);
+      Log::log_debug("TRADINGDATA: " + out_msg);
 
       _parse_msg(std::move(out_msg));
     }
@@ -186,6 +187,9 @@ void TradingStreamController::_parse_msg(const std::string &&msg) {
 std::string TradingStreamController::create_order(const TradeRequest &req) {
   m_queryBuilder->setMethod(TRADE_STREAM_METHOD::ORDER_PLACE);
 
+  if (!req.isValid())
+    return {};
+
   if (req.symbol.empty() || req.quantity < Fixed{0, req.quantity.scale()} ||
       req.price < Fixed{0, req.price.scale()})
     return {};
@@ -201,6 +205,20 @@ std::string TradingStreamController::create_order(const TradeRequest &req) {
       req.order_type == ORDER_TYPE::TAKE_PROFIT) {
     m_paramBuilder->add_price(req.price);
     m_paramBuilder->add_timeInForce(req.timeInForce);
+  }
+
+  if (req.order_type == ORDER_TYPE::STOP ||
+      req.order_type == ORDER_TYPE::STOP_MARKET ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT_MARKET) {
+    if (req.stopPrice != Fixed{0})
+      m_paramBuilder->add_stopPrice(req.stopPrice);
+  }
+
+  if (req.order_type == ORDER_TYPE::STOP_MARKET ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT_MARKET) {
+    if (req.closePosition)
+      m_paramBuilder->add_closePosition(req.closePosition);
   }
 
   if (req.reduceOnly) {
@@ -240,6 +258,91 @@ std::string TradingStreamController::create_order(const TradeRequest &req) {
   return {};
 }
 
+std::string TradingStreamController::create_algo_order(const TradeRequest &req) {
+  m_queryBuilder->setMethod(TRADE_STREAM_METHOD::ALGO_ORDER_PLACE);
+
+  if (!req.isValid())
+    return {};
+
+  if (req.symbol.empty())
+    return {};
+
+  if (req.order_type != ORDER_TYPE::STOP_MARKET &&
+      req.order_type != ORDER_TYPE::TAKE_PROFIT_MARKET &&
+      req.order_type != ORDER_TYPE::STOP &&
+      req.order_type != ORDER_TYPE::TAKE_PROFIT &&
+      req.order_type != ORDER_TYPE::TRAILING_STOP_MARKET)
+    return {};
+
+  if (req.order_type == ORDER_TYPE::STOP_MARKET ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT_MARKET ||
+      req.order_type == ORDER_TYPE::STOP ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT) {
+    if (req.stopPrice <= Fixed{0})
+      return {};
+  }
+
+  m_paramBuilder->add_algo_type_conditional();
+  m_paramBuilder->add_side(req.order_side);
+  m_paramBuilder->add_positionSide(req.position_side);
+  m_paramBuilder->add_symbol(req.symbol);
+  m_paramBuilder->add_type(req.order_type);
+
+  if (req.order_type == ORDER_TYPE::STOP ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT) {
+    m_paramBuilder->add_price(req.price);
+    m_paramBuilder->add_timeInForce(req.timeInForce);
+  }
+
+  if (req.order_type == ORDER_TYPE::STOP_MARKET ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT_MARKET ||
+      req.order_type == ORDER_TYPE::STOP ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT) {
+    m_paramBuilder->add_triggerPrice(req.stopPrice);
+  }
+
+  if (req.order_type == ORDER_TYPE::STOP_MARKET ||
+      req.order_type == ORDER_TYPE::TAKE_PROFIT_MARKET) {
+    if (req.closePosition)
+      m_paramBuilder->add_closePosition(req.closePosition);
+  }
+
+  if (req.reduceOnly)
+    m_paramBuilder->add_reduceOnly(req.reduceOnly);
+
+  if (!req.getClientAlgoId().empty())
+    m_paramBuilder->add_clientAlgoId(req.getClientAlgoId());
+
+  std::optional<JSONQuery> param_query = m_paramBuilder->commit();
+
+  if (!param_query) {
+    m_queryBuilder->cleanup();
+    return {};
+  }
+
+  std::optional<JSONQuery> query =
+      m_queryBuilder->add_borderless_params(param_query.value()).commit();
+
+  if (query) {
+    NetError netErr = m_tradeStream->execute_query(query.value());
+
+    auto value =
+        query.value().get_value(std::string(TradingStreamQueryBuilder::ID));
+
+    std::string id_str = (value ? value->get<std::string>() : "");
+
+    {
+      std::lock_guard<std::mutex> lock(m_pendingReqMtx);
+      m_pendingRequests.emplace(id_str, TRADE_STREAM_METHOD::ALGO_ORDER_PLACE);
+    }
+
+    if (!netErr.hasError())
+      return req.getClientAlgoId();
+  }
+
+  return {};
+}
+
 bool TradingStreamController::cancel_order(const TradeRequest &req) {
   m_queryBuilder->setMethod(TRADE_STREAM_METHOD::ORDER_CANCEL);
 
@@ -273,6 +376,46 @@ bool TradingStreamController::cancel_order(const TradeRequest &req) {
     if (!netErr.hasError()) {
       return true;
     }
+  }
+
+  return false;
+}
+
+bool TradingStreamController::cancel_algo_order(const TradeRequest &req) {
+  m_queryBuilder->setMethod(TRADE_STREAM_METHOD::ALGO_ORDER_CANCEL);
+
+  if (req.getClientAlgoId().empty()) {
+    m_queryBuilder->cleanup();
+    return false;
+  }
+
+  m_paramBuilder->add_clientAlgoId(req.getClientAlgoId());
+
+  std::optional<JSONQuery> param_query = m_paramBuilder->commit();
+
+  if (!param_query) {
+    m_queryBuilder->cleanup();
+    return false;
+  }
+
+  std::optional<JSONQuery> query =
+      m_queryBuilder->add_borderless_params(param_query.value()).commit();
+
+  if (query) {
+    NetError netErr = m_tradeStream->execute_query(query.value());
+
+    auto value =
+        query.value().get_value(std::string(TradingStreamQueryBuilder::ID));
+
+    std::string id_str = (value ? value->get<std::string>() : "");
+
+    {
+      std::lock_guard<std::mutex> lock(m_pendingReqMtx);
+      m_pendingRequests.emplace(id_str, TRADE_STREAM_METHOD::ALGO_ORDER_CANCEL);
+    }
+
+    if (!netErr.hasError())
+      return true;
   }
 
   return false;

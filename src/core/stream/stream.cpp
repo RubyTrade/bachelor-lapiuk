@@ -23,7 +23,7 @@ NetError Stream::_connect_to_websocket(const std::string &host, int port,
   } else {
     ss << "\nSuccessfully connected to: " << port << ":" << host << target;
 
-    Log::log(ss.str());
+    Log::log_debug(ss.str());
   }
 
   // Run context for async methods

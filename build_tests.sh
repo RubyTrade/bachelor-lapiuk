@@ -12,7 +12,8 @@ VERBOSE_FLAG=false
 CLEAN_FLAG=false
 COVERAGE_FLAG=false
 FILTERED_TEST=""
-# Args
+
+# Args: c=clean, g=coverage, f=gtest filter, r=run tests, V=verbose ctest
 while getopts "cgf:rV" opt; do
   case $opt in
     c)
@@ -27,10 +28,12 @@ while getopts "cgf:rV" opt; do
       echo "=== Filtering tests: $OPTARG ==="
       FILTERED_TEST=$OPTARG
       ;;
-    r) echo "=== Will Run the Project after the build ===" 
+    r)
+      echo "=== Will run tests after the build ==="
       RUN_FLAG=true
       ;;
-    V) echo "=== Will Run the Project Verbose ===" 
+    V)
+      echo "=== Verbose ctest ==="
       VERBOSE_FLAG=true
       ;;
     *)
@@ -40,46 +43,63 @@ while getopts "cgf:rV" opt; do
 done
 
 if [[ $CLEAN_FLAG == "true" ]]; then
-  rm -rf "$SCRIPT_DIR/build/"
+  rm -rf "${SCRIPT_DIR}/build/"
 fi
 
-mkdir -p "$SCRIPT_DIR/build"
+mkdir -p "${SCRIPT_DIR}/build"
+mkdir -p "${SCRIPT_DIR}/bin"
 
 echo "=== Configuring CMake (tests enabled) ==="
-cd "$SCRIPT_DIR/build"
+cd "${SCRIPT_DIR}/build"
 
-DEBUG_ARGS="-DCMAKE_BUILD_TYPE=Debug"
+CMAKE_ARGS=(
+  -DCMAKE_BUILD_TYPE=Debug
+  -DTRADINGBOT_BUILD_TESTS=ON
+)
 
-COVERAGE_ARGS=""
 if [[ $COVERAGE_FLAG == "true" ]]; then
-  COVERAGE_ARGS="-DTRADINGBOT_ENABLE_COVERAGE=ON"
+  CMAKE_ARGS+=(-DTRADINGBOT_ENABLE_COVERAGE=ON)
 fi
 
-cmake ${DEBUG_ARGS} -DTRADINGBOT_BUILD_TESTS=ON ${COVERAGE_ARGS} ..
-
-FILTERED_ARGS=""
-if [[ $FILTERED_TEST != "" ]]; then
-  FILTERED_ARGS="--gtest_filter=$FILTERED_TEST"
-fi
+cmake "${CMAKE_ARGS[@]}" ..
 
 echo "=== Building ==="
-cmake --build .
+if command -v nproc >/dev/null 2>&1; then
+  JOBS="$(nproc)"
+else
+  JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+fi
+cmake --build . --parallel "${JOBS}"
+
+TEST_BIN="${SCRIPT_DIR}/bin/${TARGET_NAME}"
+if [[ ! -x "$TEST_BIN" ]]; then
+  echo "Warning: expected test binary not at $TEST_BIN; trying build tree..." >&2
+  TEST_BIN="$(find "${SCRIPT_DIR}/build" -type f -name "${TARGET_NAME}" -perm -111 2>/dev/null | head -n 1)"
+fi
 
 if [[ $COVERAGE_FLAG == "true" ]]; then
   echo "=== Running coverage ==="
   cmake --build . --target coverage
 fi
-  
-if [[ $VERBOSE_FLAG == "true" ]]; then
-  echo "=== Running tests verbosely ==="
+
+if [[ $RUN_FLAG == "true" ]]; then
+  if [[ -n "$FILTERED_TEST" ]]; then
+    if [[ ! -x "$TEST_BIN" ]]; then
+      echo "Error: test binary not found (build ${TARGET_NAME} first)." >&2
+      exit 1
+    fi
+    echo "=== Running tests (gtest filter) ==="
+    "$TEST_BIN" --gtest_filter="${FILTERED_TEST}"
+  elif [[ $VERBOSE_FLAG == "true" ]]; then
+    echo "=== Running tests (ctest -V) ==="
+    ctest -V --output-on-failure
+  else
+    echo "=== Running tests (ctest) ==="
+    ctest --output-on-failure
+  fi
+elif [[ $VERBOSE_FLAG == "true" ]]; then
+  echo "=== Running tests (ctest -V) ==="
   ctest -V --output-on-failure
-fi
-
-if [[ $RUN_FLAG == "true" && $VERBOSE_FLAG == "false" ]]; then
-  echo "=== Running tests ==="
-  TEST_BIN=$(find "$SCRIPT_DIR" -type f -name "$TARGET_NAME" | head -n 1)
-
-  "$TEST_BIN" $FILTERED_ARGS
 fi
 
 echo "=== Done ==="

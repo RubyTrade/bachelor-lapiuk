@@ -5,6 +5,65 @@
 
 using namespace UserData;
 
+namespace {
+
+ORDER_STATUS map_algo_status_to_order_status(const std::string &status) {
+  if (status == "NEW" || status == "TRIGGERING" || status == "TRIGGERED")
+    return ORDER_STATUS::NEW;
+  if (status == "CANCELED")
+    return ORDER_STATUS::CANCELED;
+  if (status == "REJECTED")
+    return ORDER_STATUS::REJECTED;
+  if (status == "EXPIRED")
+    return ORDER_STATUS::EXPIRED;
+  if (status == "FINISHED")
+    return ORDER_STATUS::FILLED;
+  return ORDER_STATUS::NEW;
+}
+
+EXECUTION_TYPE map_algo_status_to_execution_type(const std::string &status) {
+  if (status == "FINISHED")
+    return EXECUTION_TYPE::TRADE;
+  if (status == "EXPIRED")
+    return EXECUTION_TYPE::EXPIRED;
+  if (status == "CANCELED" || status == "REJECTED")
+    return EXECUTION_TYPE::CANCELED;
+  return EXECUTION_TYPE::NEW;
+}
+
+bool parse_u64_from_json(const nlohmann::json &val, uint64_t &out) {
+  if (val.is_number_unsigned()) {
+    out = val.get<uint64_t>();
+    return true;
+  }
+  if (val.is_number_integer()) {
+    const auto parsed = val.get<int64_t>();
+    if (parsed >= 0) {
+      out = static_cast<uint64_t>(parsed);
+      return true;
+    }
+    return false;
+  }
+  if (val.is_string()) {
+    const auto str = val.get<std::string>();
+    if (str.empty())
+      return false;
+    try {
+      size_t idx = 0;
+      const auto parsed = std::stoull(str, &idx);
+      if (idx == str.size()) {
+        out = parsed;
+        return true;
+      }
+    } catch (...) {
+      return false;
+    }
+  }
+  return false;
+}
+
+} // namespace
+
 /* static */ ParsedUserData
 UserDataStreamParser::parse(const StreamMessage &msg) {
   if (msg.data.is_empty())
@@ -21,6 +80,8 @@ UserDataStreamParser::parse(const StreamMessage &msg) {
     return MarginCallParser::parse(msg);
   case USER_DATA_EVENT_TYPE::ACCOUNT_CONFIG_UPDATE:
     return AccountConfigUpdateParser::parse(msg);
+  case USER_DATA_EVENT_TYPE::ALGO_UPDATE:
+    return AlgoUpdateParser::parse(msg);
   default:
     return ErrorParse{"StreamMessage type is invalid"};
   }
@@ -550,5 +611,147 @@ AccountConfigUpdateParser::parse(const StreamMessage &msg) {
   return data;
   } catch (const nlohmann::json::exception &e) {
     return ErrorParse{"JSON exception in AccountConfigUpdateParser: " + std::string(e.what())};
+  }
+}
+
+/* static */ ParsedUserData AlgoUpdateParser::parse(const StreamMessage &msg) {
+  try {
+    JSONQuery jsonData = msg.data;
+    OrderTradeUpdateEvent data;
+    data.eventType = USER_DATA_EVENT_TYPE::ALGO_UPDATE;
+
+    if (auto val = jsonData.get_value(std::string(EVENT_TIME));
+        val && val->is_number_unsigned()) {
+      data.eventTime = val->get<uint64_t>();
+    }
+
+    if (auto val = jsonData.get_value(std::string(TRANSACTION_TIME));
+        val && val->is_number_unsigned()) {
+      data.transactionTime = val->get<uint64_t>();
+    }
+
+    auto orderVal = jsonData.get_value(std::string(ORDER));
+    if (!orderVal || !orderVal->is_object()) {
+      return ErrorParse{"algo order object is not parsed"};
+    }
+
+    JSONQuery algoJson = *orderVal;
+
+    if (auto val = algoJson.get_value(std::string(SYMBOL));
+        val && val->is_string()) {
+      data.symbol = val->get<std::string>();
+    } else {
+      return ErrorParse{"algo symbol is not parsed"};
+    }
+
+    if (auto val = algoJson.get_value(std::string(CLIENT_ALGO_ID));
+        val && val->is_string()) {
+      data.clientOrderId = val->get<std::string>();
+    }
+    if (data.clientOrderId.empty()) {
+      return ErrorParse{"clientAlgoId is not parsed"};
+    }
+
+    if (auto val = algoJson.get_value(std::string(MATCH_ORDER_ID)); val) {
+      parse_u64_from_json(*val, data.orderId);
+    }
+    if (data.orderId == 0) {
+      if (auto val = algoJson.get_value(std::string(ALGO_ID)); val) {
+        parse_u64_from_json(*val, data.orderId);
+      }
+    }
+
+    if (auto val = algoJson.get_value(std::string(ALGO_STATUS));
+        val && val->is_string()) {
+      const auto statusStr = val->get<std::string>();
+      data.status = map_algo_status_to_order_status(statusStr);
+      data.executionType = map_algo_status_to_execution_type(statusStr);
+    }
+
+    if (auto val = algoJson.get_value(std::string(SIDE));
+        val && val->is_string()) {
+      data.side =
+          str_to_type(ORDER_SIDE_STR, val->get_ref<const std::string &>());
+    }
+
+    if (auto val = algoJson.get_value(std::string(POSITION_SIDE));
+        val && val->is_string()) {
+      data.positionSide =
+          str_to_type(POSITION_SIDE_STR, val->get_ref<const std::string &>());
+    }
+
+    if (auto val = algoJson.get_value(std::string(ORDER_TYPE));
+        val && val->is_string()) {
+      data.orderType =
+          str_to_type(ORDER_TYPE_STR, val->get_ref<const std::string &>());
+    }
+
+    if (auto val = algoJson.get_value(std::string(TIME_IN_FORCE));
+        val && val->is_string()) {
+      data.timeInForce =
+          str_to_type(TIME_IN_FORCE_STR, val->get_ref<const std::string &>());
+    }
+
+    if (auto val = algoJson.get_value(std::string(ORIG_QTY));
+        val && val->is_string()) {
+      data.origQty = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+    }
+    if (auto val = algoJson.get_value(std::string(EXECUTED_QTY));
+        val && val->is_string()) {
+      data.executedQty = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+      data.lastExecutedQty = data.executedQty;
+    }
+    if (auto val = algoJson.get_value(std::string(AVG_PRICE));
+        val && val->is_string()) {
+      data.avgPrice = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+      data.lastPrice = data.avgPrice;
+    }
+    if (auto val = algoJson.get_value(std::string(PRICE));
+        val && val->is_string()) {
+      data.price = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+    }
+    if (auto val = algoJson.get_value(std::string(TRIGGER_PRICE));
+        val && val->is_string()) {
+      data.stopPrice = Fixed::str_to_fixed(val->get_ref<const std::string &>());
+    }
+
+    if (auto val = algoJson.get_value(std::string(REDUCE_ONLY));
+        val && val->is_boolean()) {
+      data.reduceOnly = val->get<bool>();
+    }
+    if (auto val = algoJson.get_value(std::string(CLOSE_POSITION));
+        val && val->is_boolean()) {
+      data.closePosition = val->get<bool>();
+    }
+    if (auto val = algoJson.get_value(std::string(PRICE_PROTECT));
+        val && val->is_boolean()) {
+      data.priceProtect = val->get<bool>();
+    }
+
+    if (auto val = algoJson.get_value(std::string(WORKING_TYPE));
+        val && val->is_string()) {
+      data.workingType =
+          str_to_type(WORKING_TYPE_STR, val->get_ref<const std::string &>());
+    }
+    if (auto val = algoJson.get_value(std::string(PRICE_MATCH));
+        val && val->is_string()) {
+      data.priceMatch = val->get<std::string>();
+    }
+    if (auto val = algoJson.get_value(std::string(STP_MODE));
+        val && val->is_string()) {
+      data.selfTradePreventionMode = str_to_type(
+          SELF_TRADE_PREVENTION_MODE_STR, val->get_ref<const std::string &>());
+    }
+    if (auto val = algoJson.get_value(std::string(GOOD_TILL_DATE)); val) {
+      parse_u64_from_json(*val, data.goodTillDate);
+    }
+    if (auto val = algoJson.get_value(std::string(TRIGGER_TIME)); val) {
+      parse_u64_from_json(*val, data.tradeTime);
+    }
+
+    return data;
+  } catch (const nlohmann::json::exception &e) {
+    return ErrorParse{"JSON exception in AlgoUpdateParser: " +
+                      std::string(e.what())};
   }
 }

@@ -2,12 +2,33 @@
 #include "core/parsers/common_parser_utils.hpp"
 #include "core/parsers/user_data_stream_parser.hpp"
 #include "core/utils/constants.hpp"
+#include "core/utils/helper_utils.hpp"
+#include "core/utils/log.hpp"
 
 #include <chrono>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <variant>
+
+namespace {
+std::string classify_trade_kind(const ORDER_TYPE type) {
+  switch (type) {
+  case ORDER_TYPE::TAKE_PROFIT:
+  case ORDER_TYPE::TAKE_PROFIT_MARKET:
+  case ORDER_TYPE::STOP:
+  case ORDER_TYPE::STOP_MARKET:
+  case ORDER_TYPE::TRAILING_STOP_MARKET:
+    return "TP/SL";
+  case ORDER_TYPE::LIMIT:
+  case ORDER_TYPE::MARKET:
+    return "REGULAR";
+  default:
+    return "UNKNOWN";
+  }
+}
+} // namespace
 
 OrderBook::OrderBook()
     : m_orders(std::make_unique<AccountOrders>()),
@@ -96,6 +117,8 @@ void OrderBook::_updateLastUpdateTime() {
   m_lastUpdateTime = std::chrono::duration_cast<std::chrono::milliseconds>(
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
+  if (m_update_cb)
+    m_update_cb();
 }
 
 void OrderBook::_updateOrCreateTradeLite(
@@ -123,8 +146,20 @@ void OrderBook::_updateOrCreateTradeLite(
 
 void OrderBook::_updateOrCreateOrderTradeUpdate(
     const UserData::OrderTradeUpdateEvent &event) {
-  m_orders->tryEmplace(event.clientOrderId, [&event](OrderEntry &entry) {
-    entry.fulfilledBy = USER_DATA_EVENT_TYPE::ORDER_TRADE_UPDATE;
+  m_orders->tryEmplace(event.clientOrderId, [&event, this](OrderEntry &entry) {
+    const bool isNewEntry = entry.clientOrderId.empty();
+    const bool isAlgoUpdate = event.eventType == USER_DATA_EVENT_TYPE::ALGO_UPDATE;
+    const bool algoStateChanged =
+        isNewEntry ||
+        entry.orderStatus != event.status ||
+        entry.executionType != event.executionType;
+
+    const bool becameFilled =
+        entry.orderStatus != ORDER_STATUS::FILLED &&
+        event.executionType == EXECUTION_TYPE::TRADE &&
+        event.status == ORDER_STATUS::FILLED;
+
+    entry.fulfilledBy = event.eventType;
 
     // In case this is the new OrderEntry
     entry.clientOrderId = event.clientOrderId;
@@ -149,5 +184,66 @@ void OrderBook::_updateOrCreateOrderTradeUpdate(
     entry.tradeTime = event.tradeTime;
     entry.realizedPnL = event.realizedPnL;
     entry.reduceOnly = event.reduceOnly;
+
+    if (isAlgoUpdate && algoStateChanged) {
+      _logAlgoUpdate(entry);
+    }
+
+    if (becameFilled) {
+      _logFilledTrade(entry);
+    }
   });
+}
+
+std::string OrderBook::_formatFilledTradeLog(const OrderEntry &entry) const {
+  std::ostringstream ss;
+  const std::string orderType = type_to_str(ORDER_TYPE_STR, entry.type);
+  const std::string tradeKind = classify_trade_kind(entry.type);
+
+  ss << "\n========== TRADE FILLED ==========\n"
+     << "  Symbol    : " << entry.symbol << "\n"
+     << "  Side      : " << type_to_str(ORDER_SIDE_STR, entry.side) << " | "
+     << type_to_str(POSITION_SIDE_STR, entry.positionSide) << "\n"
+     << "  Kind      : " << tradeKind << " (" << orderType << ")\n"
+     << "  Avg / Qty : " << entry.avgPrice.to_string() << " / "
+     << entry.executedQty.to_string() << "\n"
+     << "  PnL       : " << entry.realizedPnL.to_string() << "\n"
+     << "  Fee       : " << entry.commission.to_string();
+
+  if (!entry.commissionAsset.empty()) {
+    ss << " " << entry.commissionAsset;
+  }
+
+  ss << "\n"
+     << "  ClientId  : " << entry.clientOrderId << "\n"
+     << "==================================";
+  return ss.str();
+}
+
+void OrderBook::_logFilledTrade(const OrderEntry &entry) const {
+  Log::log_info(_formatFilledTradeLog(entry));
+}
+
+std::string OrderBook::_formatAlgoUpdateLog(const OrderEntry &entry) const {
+  std::ostringstream ss;
+  const std::string orderType = type_to_str(ORDER_TYPE_STR, entry.type);
+  const std::string tradeKind = classify_trade_kind(entry.type);
+
+  ss << "\n----------- ALGO UPDATE -----------\n"
+     << "  Symbol    : " << entry.symbol << "\n"
+     << "  Side      : " << type_to_str(ORDER_SIDE_STR, entry.side) << " | "
+     << type_to_str(POSITION_SIDE_STR, entry.positionSide) << "\n"
+     << "  Kind      : " << tradeKind << " (" << orderType << ")\n"
+     << "  Status    : " << type_to_str(ORDER_STATUS_STR, entry.orderStatus)
+     << " / " << type_to_str(EXECUTION_TYPE_STR, entry.executionType) << "\n"
+     << "  OrderPx   : " << entry.price.to_string() << "\n"
+     << "  Filled    : " << entry.executedQty.to_string()
+     << " @ " << entry.avgPrice.to_string() << "\n"
+     << "  ClientId  : " << entry.clientOrderId << "\n"
+     << "-----------------------------------";
+  return ss.str();
+}
+
+void OrderBook::_logAlgoUpdate(const OrderEntry &entry) const {
+  Log::log_info(_formatAlgoUpdateLog(entry));
 }

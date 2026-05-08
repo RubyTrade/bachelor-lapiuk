@@ -26,6 +26,10 @@ ParsedTradingStream TradingStreamParser::parse(const TradingResultStream &msg) {
     return OrderCancelParser::parse(msg.result);
   case TRADE_STREAM_METHOD::ORDER_STATUS:
     return OrderStatusParser::parse(msg.result);
+  case TRADE_STREAM_METHOD::ALGO_ORDER_PLACE:
+    return AlgoOrderPlaceParser::parse(msg.result);
+  case TRADE_STREAM_METHOD::ALGO_ORDER_CANCEL:
+    return AlgoOrderCancelParser::parse(msg.result);
   case TRADE_STREAM_METHOD::ACCOUNT_POSITION:
     return AccountPositionParser::parse(msg.result);
   default:
@@ -358,6 +362,110 @@ ParsedTradingStream OrderCancelParser::parse(const ResultMessage &msg) {
   } catch (const nlohmann::json::exception &e) {
     ErrorParse error;
     error.parse_error = std::string("OrderCancelParser error: ") + e.what();
+    return error;
+  }
+}
+
+// ============================================================================
+// Algo Order Place Parser
+// ============================================================================
+ParsedTradingStream AlgoOrderPlaceParser::parse(const ResultMessage &msg) {
+  try {
+    AlgoOrderPlaceResponse response;
+
+    const JSONQuery &json = msg.result_msg;
+
+    if (json.is_empty()) {
+      return ErrorParse{"JSON is empty"};
+    }
+
+    if (auto val = json.get_value(std::string(ALGO_ID));
+        val && val->is_number_integer()) {
+      response.algoId = val->get<int64_t>();
+    }
+
+    if (auto val = json.get_value(std::string(CLIENT_ALGO_ID));
+        val && val->is_string()) {
+      response.clientAlgoId = val->get<std::string>();
+    }
+
+    if (auto val = json.get_value(std::string(SYMBOL));
+        val && val->is_string()) {
+      response.symbol = val->get<std::string>();
+    }
+
+    if (auto val = json.get_value(std::string(ORDER_TYPE_F));
+        val && val->is_string()) {
+      response.orderType =
+          str_to_type(ORDER_TYPE_STR, val->get<std::string>());
+    }
+
+    if (auto val = json.get_value(std::string(SIDE)); val && val->is_string()) {
+      response.side = str_to_type(ORDER_SIDE_STR, val->get<std::string>());
+    }
+
+    if (auto val = json.get_value(std::string(POSITION_SIDE));
+        val && val->is_string()) {
+      response.positionSide =
+          str_to_type(POSITION_SIDE_STR, val->get<std::string>());
+    }
+
+    if (auto val = json.get_value(std::string(TRIGGER_PRICE));
+        val && val->is_string()) {
+      response.triggerPrice =
+          Fixed::str_to_fixed(val->get_ref<const std::string &>());
+    }
+
+    if (auto val = json.get_value(std::string(ALGO_STATUS));
+        val && val->is_string()) {
+      response.algoStatus = val->get<std::string>();
+    }
+
+    return response;
+  } catch (const nlohmann::json::exception &e) {
+    ErrorParse error;
+    error.parse_error =
+        std::string("AlgoOrderPlaceParser error: ") + e.what();
+    return error;
+  }
+}
+
+// ============================================================================
+// Algo Order Cancel Parser
+// ============================================================================
+ParsedTradingStream AlgoOrderCancelParser::parse(const ResultMessage &msg) {
+  try {
+    AlgoOrderCancelResponse response;
+
+    const JSONQuery &json = msg.result_msg;
+
+    if (json.is_empty()) {
+      return ErrorParse{"JSON is empty"};
+    }
+
+    if (auto val = json.get_value(std::string(ALGO_ID));
+        val && val->is_number_integer()) {
+      response.algoId = val->get<int64_t>();
+    }
+
+    if (auto val = json.get_value(std::string(CLIENT_ALGO_ID));
+        val && val->is_string()) {
+      response.clientAlgoId = val->get<std::string>();
+    }
+
+    if (auto val = json.get_value(std::string(CODE)); val && val->is_string()) {
+      response.code = val->get<std::string>();
+    }
+
+    if (auto val = json.get_value(std::string(MSG)); val && val->is_string()) {
+      response.msg = val->get<std::string>();
+    }
+
+    return response;
+  } catch (const nlohmann::json::exception &e) {
+    ErrorParse error;
+    error.parse_error =
+        std::string("AlgoOrderCancelParser error: ") + e.what();
     return error;
   }
 }

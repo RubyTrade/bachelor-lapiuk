@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(TradingBot VERSION 1.0)
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # CPP Settings
@@ -11,21 +14,9 @@ option(TRADINGBOT_ENABLE_COVERAGE "Enable code coverage report (tests only)" OFF
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
-# --- Library (reusable)
-file(GLOB_RECURSE TRADINGBOT_LIB_SOURCES CONFIGURE_DEPENDS
-  src/core/*.cpp
-)
-
-add_library(TradingBotLib ${TRADINGBOT_LIB_SOURCES})
-add_library(TradingBot::Lib ALIAS TradingBotLib)
-
-target_include_directories(TradingBotLib
-  PUBLIC
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-# Dependencies
-find_package(Boost REQUIRED COMPONENTS system thread)
+# --- Third-party (shared by core; strategy uses only via TradingBotCore)
+# Boost.System is header-only since 1.69; Homebrew Boost omits a boost_system CMake package.
+find_package(Boost REQUIRED COMPONENTS thread)
 
 find_package(OpenSSL REQUIRED)
 
@@ -40,23 +31,19 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nlohmann_json)
 
 set(TRADINGBOT_BOOST_LIBS "")
-if(TARGET Boost::system AND TARGET Boost::thread)
-  set(TRADINGBOT_BOOST_LIBS Boost::system Boost::thread)
+if(TARGET Boost::thread)
+  set(TRADINGBOT_BOOST_LIBS Boost::thread)
 else()
   set(TRADINGBOT_BOOST_LIBS ${Boost_LIBRARIES})
 endif()
 
-target_link_libraries(TradingBotLib
-  PUBLIC
-    ${TRADINGBOT_BOOST_LIBS}
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    nlohmann_json::nlohmann_json
-)
+# --- Libraries: core (infra) → strategy (logic) → app
+add_subdirectory(src/core)
+add_subdirectory(src/strategy)
 
-if(Boost_INCLUDE_DIRS)
-  target_include_directories(TradingBotLib SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
-endif()
+# Backward-compatible aliases
+add_library(TradingBotLib ALIAS TradingBotCore)
+add_library(TradingBot::Lib ALIAS TradingBotCore)
 
 # --- Executable
 add_executable(TradingBot
@@ -65,8 +52,13 @@ add_executable(TradingBot
 
 target_link_libraries(TradingBot
   PRIVATE
-    TradingBotLib
+    TradingBotStrategy
 )
+
+target_compile_definitions(TradingBot PRIVATE
+    $<$<CONFIG:Debug>:DEBUG_BUILD>
+    $<$<CONFIG:Release>:RELEASE_BUILD>
+) 
 
 # --- Tests
 if(TRADINGBOT_BUILD_TESTS)
@@ -85,8 +77,8 @@ if(TRADINGBOT_BUILD_TESTS)
   if(TRADINGBOT_ENABLE_COVERAGE)
     # Coverage flags
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      target_compile_options(TradingBotLib PUBLIC -fprofile-instr-generate -fcoverage-mapping)
-      target_link_options(TradingBotLib PUBLIC -fprofile-instr-generate -fcoverage-mapping)
+      target_compile_options(TradingBotCore PUBLIC -fprofile-instr-generate -fcoverage-mapping)
+      target_link_options(TradingBotCore PUBLIC -fprofile-instr-generate -fcoverage-mapping)
       target_compile_options(TradingBotTests PRIVATE -fprofile-instr-generate -fcoverage-mapping)
       target_link_options(TradingBotTests PRIVATE -fprofile-instr-generate -fcoverage-mapping)
 
@@ -105,8 +97,8 @@ if(TRADINGBOT_BUILD_TESTS)
         message(WARNING "Coverage requested but llvm-profdata/llvm-cov not found; skipping coverage target")
       endif()
     elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-      target_compile_options(TradingBotLib PUBLIC --coverage -O0 -g)
-      target_link_options(TradingBotLib PUBLIC --coverage)
+      target_compile_options(TradingBotCore PUBLIC --coverage -O0 -g)
+      target_link_options(TradingBotCore PUBLIC --coverage)
       target_compile_options(TradingBotTests PRIVATE --coverage -O0 -g)
       target_link_options(TradingBotTests PRIVATE --coverage)
 
@@ -136,4 +128,3 @@ if(TRADINGBOT_BUILD_TESTS)
     endif()
   endif()
 endif()
-

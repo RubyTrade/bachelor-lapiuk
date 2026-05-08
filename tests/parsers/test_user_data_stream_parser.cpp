@@ -263,3 +263,55 @@ TEST(UserDataEventParsing, MultiAssetModeUpdate) {
   auto msg = makeMessage(USER_DATA_EVENT_TYPE::ACCOUNT_CONFIG_UPDATE, data);
   EXPECT_EQ(msg.userDataType, USER_DATA_EVENT_TYPE::ACCOUNT_CONFIG_UPDATE);
 }
+
+TEST(UserDataEventParsing, AlgoUpdateConvertsToOrderTradeUpdateEvent) {
+  const std::string data = R"({
+        "e":"ALGO_UPDATE",
+        "T":1750515742297,
+        "E":1750515742303,
+        "o":{
+            "caid":"algo-client-1",
+            "aid":2148719,
+            "at":"CONDITIONAL",
+            "o":"TAKE_PROFIT_MARKET",
+            "s":"BNBUSDT",
+            "S":"SELL",
+            "ps":"BOTH",
+            "f":"GTC",
+            "q":"0.01",
+            "X":"FINISHED",
+            "ai":"12345678",
+            "ap":"750.50000",
+            "aq":"0.01000",
+            "tp":"750",
+            "p":"0",
+            "V":"EXPIRE_MAKER",
+            "wt":"CONTRACT_PRICE",
+            "pm":"NONE",
+            "cp":true,
+            "pP":false,
+            "R":true,
+            "tt":1750515750000,
+            "gtd":0
+        }
+    })";
+
+  auto msg = makeMessage(USER_DATA_EVENT_TYPE::ALGO_UPDATE, data);
+  auto parsed = UserData::UserDataStreamParser::parse(msg);
+
+  ASSERT_TRUE(std::holds_alternative<UserData::OrderTradeUpdateEvent>(parsed));
+  const auto &evt = std::get<UserData::OrderTradeUpdateEvent>(parsed);
+
+  EXPECT_EQ(evt.eventType, USER_DATA_EVENT_TYPE::ALGO_UPDATE);
+  EXPECT_EQ(evt.clientOrderId, "algo-client-1");
+  EXPECT_EQ(evt.symbol, "BNBUSDT");
+  EXPECT_EQ(evt.orderId, 12345678u);
+  EXPECT_EQ(evt.orderType, ORDER_TYPE::TAKE_PROFIT_MARKET);
+  EXPECT_EQ(evt.side, ORDER_SIDE::SELL);
+  EXPECT_EQ(evt.positionSide, POSITION_SIDE::BOTH);
+  EXPECT_EQ(evt.status, ORDER_STATUS::FILLED);
+  EXPECT_EQ(evt.executionType, EXECUTION_TYPE::TRADE);
+  EXPECT_EQ(evt.executedQty, Fixed("0.01"));
+  EXPECT_EQ(evt.avgPrice, Fixed("750.5"));
+  EXPECT_EQ(evt.tradeTime, 1750515750000u);
+}

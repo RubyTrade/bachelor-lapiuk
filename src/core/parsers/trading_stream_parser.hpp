@@ -97,6 +97,34 @@ struct OrderCancelResponse {
 };
 
 // ============================================================================
+// Algo order place (algoOrder.place)
+// ============================================================================
+struct AlgoOrderPlaceResponse {
+  TRADE_STREAM_METHOD apiType = TRADE_STREAM_METHOD::ALGO_ORDER_PLACE;
+
+  int64_t algoId = 0;
+  std::string clientAlgoId{};
+  std::string symbol{};
+  ORDER_TYPE orderType{};
+  ORDER_SIDE side{};
+  POSITION_SIDE positionSide{};
+  Fixed triggerPrice{};
+  std::string algoStatus{};
+};
+
+// ============================================================================
+// Algo order cancel (algoOrder.cancel)
+// ============================================================================
+struct AlgoOrderCancelResponse {
+  TRADE_STREAM_METHOD apiType = TRADE_STREAM_METHOD::ALGO_ORDER_CANCEL;
+
+  int64_t algoId = 0;
+  std::string clientAlgoId{};
+  std::string code{};
+  std::string msg{};
+};
+
+// ============================================================================
 // Order Status Response
 // ============================================================================
 struct OrderStatusResponse {
@@ -157,7 +185,8 @@ struct TradingResultStream {
 using ParsedTradingStream =
     std::variant<AccountStatusResponse, AccountBalanceResponse,
                  OrderPlaceResponse, OrderModifyResponse, OrderCancelResponse,
-                 OrderStatusResponse, AccountPositionResponse, ErrorParse>;
+                 OrderStatusResponse, AlgoOrderPlaceResponse,
+                 AlgoOrderCancelResponse, AccountPositionResponse, ErrorParse>;
 
 class TradingStreamParser {
 public:
@@ -235,6 +264,32 @@ private:
   static constexpr std::string_view CLIENT_ORDER_ID = "clientOrderId";
   static constexpr std::string_view STATUS = "status";
   static constexpr std::string_view UPDATE_TIME = "updateTime";
+};
+
+class AlgoOrderPlaceParser {
+public:
+  static ParsedTradingStream parse(const ResultMessage &msg);
+
+private:
+  static constexpr std::string_view ALGO_ID = "algoId";
+  static constexpr std::string_view CLIENT_ALGO_ID = "clientAlgoId";
+  static constexpr std::string_view SYMBOL = "symbol";
+  static constexpr std::string_view ORDER_TYPE_F = "orderType";
+  static constexpr std::string_view SIDE = "side";
+  static constexpr std::string_view POSITION_SIDE = "positionSide";
+  static constexpr std::string_view TRIGGER_PRICE = "triggerPrice";
+  static constexpr std::string_view ALGO_STATUS = "algoStatus";
+};
+
+class AlgoOrderCancelParser {
+public:
+  static ParsedTradingStream parse(const ResultMessage &msg);
+
+private:
+  static constexpr std::string_view ALGO_ID = "algoId";
+  static constexpr std::string_view CLIENT_ALGO_ID = "clientAlgoId";
+  static constexpr std::string_view CODE = "code";
+  static constexpr std::string_view MSG = "msg";
 };
 
 class OrderStatusParser {

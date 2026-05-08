@@ -394,10 +394,28 @@ ParametersBuilder &ParametersBuilder::add_reduceOnly(bool reduceOnly) {
   return *this;
 }
 
+ParametersBuilder &ParametersBuilder::add_closePosition(bool close) {
+  _add_to_params("closePosition", close ? "true" : "false");
+
+  return *this;
+}
+
 // Algo params
-ParametersBuilder &ParametersBuilder::add_algoType(const ORDER_TYPE &type) {
-  std::string type_str = type_to_str(ORDER_TYPE_STR, type);
-  _add_to_params("algoType", type_str);
+ParametersBuilder &ParametersBuilder::add_algo_type_conditional() {
+  _add_to_params("algoType", "CONDITIONAL");
+
+  return *this;
+}
+
+ParametersBuilder &
+ParametersBuilder::add_clientAlgoId(const std::string &clientAlgoId) {
+  _add_to_params("clientAlgoId", clientAlgoId);
+
+  return *this;
+}
+
+ParametersBuilder &ParametersBuilder::add_algoId(int64_t algoId) {
+  _add_to_params("algoId", std::to_string(algoId));
 
   return *this;
 }
@@ -412,6 +430,13 @@ ParametersBuilder::add_newOrderRespType(const std::string &type) {
 ParametersBuilder &ParametersBuilder::add_triggerPrice(const Fixed &price) {
   if (price > Fixed(0))
     _add_to_params("triggerPrice", price.to_string());
+
+  return *this;
+}
+
+ParametersBuilder &ParametersBuilder::add_stopPrice(const Fixed &price) {
+  if (price > Fixed(0))
+    _add_to_params("stopPrice", price.to_string());
 
   return *this;
 }

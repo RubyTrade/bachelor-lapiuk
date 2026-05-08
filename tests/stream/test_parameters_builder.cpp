@@ -124,15 +124,15 @@ TEST(ParametersBuilder, AddReduceOnly) {
 }
 
 // Algo parameters
-TEST(ParametersBuilder, AddAlgoType) {
+TEST(ParametersBuilder, AddAlgoTypeConditional) {
   ParametersBuilder builder;
-  builder.add_algoType(ORDER_TYPE::TRAILING_STOP_MARKET);
+  builder.add_algo_type_conditional();
   auto query = builder.commit();
 
   EXPECT_TRUE(query.has_value());
   if (query) {
     std::string json_str = query->str();
-    EXPECT_NE(json_str.find("TRAILING_STOP_MARKET"), std::string::npos);
+    EXPECT_NE(json_str.find("CONDITIONAL"), std::string::npos);
   }
 }
 
